@@ -41,7 +41,7 @@ Descricao | Tipo | Categoria | Jan | Fev | Mar | Abr | Mai | Jun | Jul | Ago | S
 
 Status como `Pago`, `Liquidado`, `Pendente`, `Recebido`, `Quitado` e semelhantes sao agrupados automaticamente.
 
-Se a planilha tiver apenas `Valor`, sem coluna `Tipo`, o dashboard considera os registros como `Saida` para continuar funcionando com planilhas de contas a pagar.
+Se a planilha tiver apenas `Descricao`, `Valor`, `Data` e `Status`, o dashboard entra em modo `Conta`: os cards e graficos mostram valor total, contas pagas, pendentes e em aberto.
 
 ## Deploy no Vercel
 

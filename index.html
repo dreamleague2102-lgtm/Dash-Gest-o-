@@ -16,7 +16,7 @@
         <span class="brand-mark">B</span>
         <span>
           <strong>Painel Financeiro</strong>
-          <small>Visao consolidada · Exercicio <span id="currentYear">2026</span></small>
+          <small>Visao consolidada - Exercicio <span id="currentYear">2026</span></small>
         </span>
       </a>
 
@@ -45,7 +45,7 @@
       <section class="summary-grid" aria-label="Resumo financeiro">
         <article class="metric-card">
           <div class="metric-top">
-            <span>Receita Total</span>
+            <span id="cardTotalLabel">Receita Total</span>
             <strong id="cardRevenueChange" class="trend-pill">--</strong>
           </div>
           <strong id="cardTotal" class="metric-value">--</strong>
@@ -54,7 +54,7 @@
 
         <article class="metric-card">
           <div class="metric-top">
-            <span>Despesa Total</span>
+            <span id="cardExpenseLabel">Despesa Total</span>
             <strong id="cardExpenseChange" class="trend-pill">--</strong>
           </div>
           <strong id="cardMonth" class="metric-value">--</strong>
@@ -63,7 +63,7 @@
 
         <article class="metric-card">
           <div class="metric-top">
-            <span>Lucro Liquido</span>
+            <span id="cardProfitLabel">Lucro Liquido</span>
             <strong id="cardProfitChange" class="trend-pill">--</strong>
           </div>
           <strong id="cardAverage" class="metric-value">--</strong>
@@ -72,7 +72,7 @@
 
         <article class="metric-card">
           <div class="metric-top">
-            <span>Saldo em Caixa</span>
+            <span id="cardBalanceLabel">Saldo em Caixa</span>
             <strong id="cardBalanceChange" class="trend-pill">--</strong>
           </div>
           <strong id="cardBalance" class="metric-value">--</strong>
@@ -83,12 +83,12 @@
       <section class="panel panel-wide">
         <div class="panel-header">
           <div>
-            <h2>Receita vs Despesa</h2>
+            <h2 id="monthlyTitle">Receita vs Despesa</h2>
             <p id="monthlyStats">Comparativo mensal</p>
           </div>
           <div class="chart-legend">
-            <span><i class="dot income"></i>Receita</span>
-            <span><i class="dot expense"></i>Despesa</span>
+            <span><i class="dot income"></i><span id="monthlyLegendA">Receita</span></span>
+            <span><i class="dot expense"></i><span id="monthlyLegendB">Despesa</span></span>
           </div>
         </div>
         <div class="chart-box chart-box-main">
@@ -123,9 +123,9 @@
           </div>
           <div class="panel-tools">
             <div class="chart-legend">
-              <span><i class="dot income"></i>Receita</span>
-              <span><i class="dot expense"></i>Despesa</span>
-              <span><i class="dot profit"></i>Lucro</span>
+              <span><i class="dot income"></i><span id="dailyLegendA">Receita</span></span>
+              <span><i class="dot expense"></i><span id="dailyLegendB">Despesa</span></span>
+              <span><i class="dot profit"></i><span id="dailyLegendC">Lucro</span></span>
             </div>
             <select id="dailyMonthFilter" aria-label="Mes do desempenho diario">
               <option value="">Mes atual</option>
@@ -135,15 +135,15 @@
 
         <div class="daily-kpis">
           <article>
-            <span>Receita</span>
+            <span id="dailyRevenueLabel">Receita</span>
             <strong id="dailyRevenue">--</strong>
           </article>
           <article>
-            <span>Despesa</span>
+            <span id="dailyExpenseLabel">Despesa</span>
             <strong id="dailyExpense">--</strong>
           </article>
           <article>
-            <span>Lucro</span>
+            <span id="dailyProfitLabel">Lucro</span>
             <strong id="dailyProfit">--</strong>
           </article>
         </div>
@@ -166,7 +166,7 @@
             <thead>
               <tr>
                 <th>Descricao</th>
-                <th>Tipo</th>
+                <th id="tableTypeHeader">Tipo</th>
                 <th>Categoria</th>
                 <th>Mes</th>
                 <th>Status</th>

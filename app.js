@@ -237,6 +237,7 @@ function buildType(value, amount, fallback = "saida") {
 }
 
 function labelType(type) {
+  if (type === "conta") return "Conta";
   return type === "entrada" ? "Entrada" : "Saida";
 }
 
@@ -257,6 +258,7 @@ function normalizeRows(rows) {
   const expenseKey = findKey(keys, ["despesa", "custo", "saida"]);
   const hasSplitValues = Boolean(revenueKey && expenseKey);
   const amountKey = findKey(keys, ["valor", "amount", "value", "total", "preco", "price"]);
+  const simpleAccountMode = Boolean(amountKey && !typeKey && !revenueKey && !expenseKey);
   const statusKey = findKey(keys, ["status", "pago", "estado", "situacao"]);
   const dateKey = findKey(keys, ["data", "date", "vencimento", "pagamento", "lancamento"]);
   const monthKey = findKey(keys, ["mes", "competencia", "periodo"]);
@@ -282,7 +284,7 @@ function normalizeRows(rows) {
             amount,
             date: null,
             monthInfo,
-            fallbackType: buildType(typeKey ? row[typeKey] : "", amount),
+            fallbackType: simpleAccountMode ? "conta" : buildType(typeKey ? row[typeKey] : "", amount),
           });
         })
         .filter(Boolean);
@@ -342,7 +344,7 @@ function normalizeRows(rows) {
       const date = dateKey ? parseDate(row[dateKey]) : null;
       const monthInfo = date ? monthInfoFromDate(date) : monthKey ? monthInfoFromText(row[monthKey]) : null;
       const amountValue = amountKey ? parseAmount(row[amountKey]) : revenueKey ? parseAmount(row[revenueKey]) : 0;
-      const fallbackType = revenueKey && !amountKey ? "entrada" : "saida";
+      const fallbackType = simpleAccountMode ? "conta" : revenueKey && !amountKey ? "entrada" : "saida";
 
       return buildItem({
         row,
@@ -384,7 +386,7 @@ function buildItem({ row, rowIndex, descKey, categoryKey, sourceKey, typeKey, st
     type,
     typeLabel: labelType(type),
     amount: absoluteAmount,
-    signedAmount: type === "entrada" ? absoluteAmount : -absoluteAmount,
+    signedAmount: type === "entrada" || type === "conta" ? absoluteAmount : -absoluteAmount,
     receita: type === "entrada" ? absoluteAmount : 0,
     despesa: type === "saida" ? absoluteAmount : 0,
     lucro: type === "entrada" ? absoluteAmount : -absoluteAmount,
@@ -489,8 +491,12 @@ function aggregateBy(items, keyBuilder) {
   return Array.from(
     items.reduce((map, item) => {
       const key = keyBuilder(item);
-      const current = map.get(key.value) || { ...key, amount: 0, receita: 0, despesa: 0, lucro: 0, count: 0 };
+      const current =
+        map.get(key.value) || { ...key, amount: 0, paidAmount: 0, pendingAmount: 0, lateAmount: 0, receita: 0, despesa: 0, lucro: 0, count: 0 };
       current.amount += item.amount;
+      if (item.status === "Liquidado") current.paidAmount += item.amount;
+      if (item.status === "Pendente") current.pendingAmount += item.amount;
+      if (item.status === "Atrasado") current.lateAmount += item.amount;
       current.receita += item.receita;
       current.despesa += item.despesa;
       current.lucro += item.lucro;
@@ -504,18 +510,41 @@ function aggregateBy(items, keyBuilder) {
 function calculateTotals(items) {
   const totals = items.reduce(
     (acc, item) => {
+      acc.totalAmount += item.amount;
       acc.receita += item.receita;
       acc.despesa += item.despesa;
       acc.lucro += item.lucro;
       acc.count += 1;
-      if (item.status === "Liquidado") acc.liquidado += 1;
-      if (item.status === "Pendente") acc.pendente += 1;
-      if (item.status === "Atrasado") acc.atrasado += 1;
+      if (item.status === "Liquidado") {
+        acc.liquidado += 1;
+        acc.paidAmount += item.amount;
+      }
+      if (item.status === "Pendente") {
+        acc.pendente += 1;
+        acc.pendingAmount += item.amount;
+      }
+      if (item.status === "Atrasado") {
+        acc.atrasado += 1;
+        acc.lateAmount += item.amount;
+      }
       return acc;
     },
-    { receita: 0, despesa: 0, lucro: 0, count: 0, liquidado: 0, pendente: 0, atrasado: 0 }
+    {
+      totalAmount: 0,
+      paidAmount: 0,
+      pendingAmount: 0,
+      lateAmount: 0,
+      receita: 0,
+      despesa: 0,
+      lucro: 0,
+      count: 0,
+      liquidado: 0,
+      pendente: 0,
+      atrasado: 0,
+    }
   );
 
+  totals.openAmount = totals.pendingAmount + totals.lateAmount;
   totals.margem = totals.receita ? (totals.lucro / totals.receita) * 100 : 0;
   totals.saldo = totals.lucro;
   return totals;
@@ -618,6 +647,50 @@ function formatAxisCurrency(value) {
   return `${Math.round(value)}`;
 }
 
+function setTrendBadge(id, current, previous, options = {}) {
+  const element = getElement(id);
+  if (!element) return;
+
+  const pct = variationPercent(current, previous);
+  const symbol = pct >= 0 ? "+" : "-";
+  element.textContent = `${symbol} ${formatPercent(Math.abs(pct))}`;
+  element.className = "trend-pill";
+
+  if (options.expense) {
+    element.classList.toggle("down", pct > 0);
+    element.classList.toggle("warn", pct < 0);
+    return;
+  }
+
+  element.classList.toggle("down", pct < 0);
+}
+
+function isAccountsMode(items) {
+  return items.length > 0 && !items.some((item) => item.type === "entrada" || item.type === "saida");
+}
+
+function setText(id, value) {
+  const element = getElement(id);
+  if (element) element.textContent = value;
+}
+
+function updateModeLabels(accountsMode) {
+  setText("cardTotalLabel", accountsMode ? "Valor Total" : "Receita Total");
+  setText("cardExpenseLabel", accountsMode ? "Total Pago" : "Despesa Total");
+  setText("cardProfitLabel", accountsMode ? "Total Pendente" : "Lucro Liquido");
+  setText("cardBalanceLabel", accountsMode ? "Em Aberto" : "Saldo em Caixa");
+  setText("monthlyTitle", accountsMode ? "Pagas vs Pendentes" : "Receita vs Despesa");
+  setText("monthlyLegendA", accountsMode ? "Pagas" : "Receita");
+  setText("monthlyLegendB", accountsMode ? "Pendentes" : "Despesa");
+  setText("dailyLegendA", accountsMode ? "Pagas" : "Receita");
+  setText("dailyLegendB", accountsMode ? "Pendentes" : "Despesa");
+  setText("dailyLegendC", accountsMode ? "Total" : "Lucro");
+  setText("dailyRevenueLabel", accountsMode ? "Pagas" : "Receita");
+  setText("dailyExpenseLabel", accountsMode ? "Pendentes" : "Despesa");
+  setText("dailyProfitLabel", accountsMode ? "Total" : "Lucro");
+  setText("tableTypeHeader", accountsMode ? "Classe" : "Tipo");
+}
+
 function destroyChart(name) {
   if (state.charts[name]) {
     state.charts[name].destroy();
@@ -667,6 +740,72 @@ function renderMonthlyChart(items) {
         {
           label: "Despesa",
           data: despesas,
+          backgroundColor: grouped.map((item) => (item.value === currentMonthKey ? "rgba(255, 79, 94, 1)" : "rgba(255, 79, 94, 0.9)")),
+          borderColor: "#ff4f5e",
+          borderWidth: 1,
+          borderRadius: 5,
+          barPercentage: 0.72,
+          categoryPercentage: 0.7,
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: (context) => `${context.dataset.label}: ${formatCurrency(context.parsed.y)}`,
+          },
+        },
+      },
+      scales: {
+        y: {
+          ticks: { color: "#9ab4d5", callback: (value) => formatAxisCurrency(value) },
+          grid: { color: "rgba(154, 180, 213, 0.12)", borderDash: [4, 4] },
+        },
+        x: {
+          ticks: { color: "#9ab4d5" },
+          grid: { display: false },
+        },
+      },
+    },
+  });
+}
+
+function renderMonthlyChart(items) {
+  const accountsMode = isAccountsMode(items);
+  const currentMonthKey = monthInfoFromOffset(0).key;
+  const grouped = aggregateMonthly(items);
+  const singleYear = new Set(grouped.map((item) => monthSortYear(item.sort))).size === 1;
+  const labels = grouped.map((item) => (singleYear ? item.label.split("/")[0] : item.label));
+  const primaryValues = grouped.map((item) => (accountsMode ? item.paidAmount : item.receita));
+  const secondaryValues = grouped.map((item) => (accountsMode ? item.pendingAmount + item.lateAmount : item.despesa));
+
+  getElement("monthlyStats").textContent = grouped.length
+    ? `Comparativo mensal - ${getPeriodLabel()}`
+    : "Nenhum mes encontrado nos filtros atuais.";
+
+  destroyChart("monthly");
+  state.charts.monthly = new Chart(getElement("monthlyChart"), {
+    type: "bar",
+    data: {
+      labels,
+      datasets: [
+        {
+          label: accountsMode ? "Pagas" : "Receita",
+          data: primaryValues,
+          backgroundColor: grouped.map((item) => (item.value === currentMonthKey ? "rgba(72, 213, 151, 1)" : "rgba(72, 213, 151, 0.88)")),
+          borderColor: "#2dd4bf",
+          borderWidth: 1,
+          borderRadius: 5,
+          barPercentage: 0.72,
+          categoryPercentage: 0.7,
+        },
+        {
+          label: accountsMode ? "Pendentes" : "Despesa",
+          data: secondaryValues,
           backgroundColor: grouped.map((item) => (item.value === currentMonthKey ? "rgba(255, 79, 94, 1)" : "rgba(255, 79, 94, 0.9)")),
           borderColor: "#ff4f5e",
           borderWidth: 1,
@@ -856,6 +995,104 @@ function renderDailyChart(items) {
   });
 }
 
+function renderDailyChart(items) {
+  const accountsMode = isAccountsMode(items);
+  const monthKey = resolveDailyMonth(items);
+  const parts = monthKeyParts(monthKey);
+  const monthItems = items.filter((item) => item.monthKey === monthKey && isValidDate(item.date));
+  const totals = calculateTotals(monthItems);
+
+  getElement("dailyRevenue").textContent = formatCurrencyCompact(accountsMode ? totals.paidAmount : totals.receita);
+  getElement("dailyExpense").textContent = formatCurrencyCompact(accountsMode ? totals.openAmount : totals.despesa);
+  getElement("dailyProfit").textContent = formatCurrencyCompact(accountsMode ? totals.totalAmount : totals.lucro);
+  getElement("dailyStats").textContent = `Evolucao diaria - ${labelFromMonthKey(monthKey)}`;
+
+  const daysInMonth = parts ? new Date(parts.year, parts.monthIndex + 1, 0).getDate() : 31;
+  const rows = Array.from({ length: daysInMonth }, (_, index) => ({
+    label: String(index + 1).padStart(2, "0"),
+    primary: 0,
+    secondary: 0,
+    tertiary: 0,
+  }));
+
+  monthItems.forEach((item) => {
+    const row = rows[item.date.getDate() - 1];
+    if (!row) return;
+
+    if (accountsMode) {
+      if (item.status === "Liquidado") row.primary += item.amount;
+      if (item.status !== "Liquidado") row.secondary += item.amount;
+      row.tertiary += item.amount;
+      return;
+    }
+
+    row.primary += item.receita;
+    row.secondary += item.despesa;
+    row.tertiary += item.lucro;
+  });
+
+  destroyChart("daily");
+  state.charts.daily = new Chart(getElement("dailyChart"), {
+    type: "line",
+    data: {
+      labels: rows.map((row) => row.label),
+      datasets: [
+        {
+          label: accountsMode ? "Pagas" : "Receita",
+          data: rows.map((row) => row.primary),
+          borderColor: "#48d597",
+          backgroundColor: "rgba(72, 213, 151, 0.08)",
+          pointRadius: 0,
+          borderWidth: 3,
+          tension: 0.36,
+        },
+        {
+          label: accountsMode ? "Pendentes" : "Despesa",
+          data: rows.map((row) => row.secondary),
+          borderColor: "#ff4f5e",
+          backgroundColor: "rgba(255, 79, 94, 0.08)",
+          pointRadius: 0,
+          borderWidth: 3,
+          tension: 0.36,
+        },
+        {
+          label: accountsMode ? "Total" : "Lucro",
+          data: rows.map((row) => row.tertiary),
+          borderColor: "#00b8ff",
+          backgroundColor: "rgba(0, 184, 255, 0.08)",
+          borderDash: [5, 5],
+          pointRadius: 0,
+          borderWidth: 2,
+          tension: 0.36,
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            title: (contexts) => `${contexts[0].label}/${String(parts ? parts.monthIndex + 1 : new Date().getMonth() + 1).padStart(2, "0")}`,
+            label: (context) => `${context.dataset.label}: ${formatCurrency(context.parsed.y)}`,
+          },
+        },
+      },
+      scales: {
+        y: {
+          ticks: { color: "#9ab4d5", callback: (value) => formatAxisCurrency(value) },
+          grid: { color: "rgba(154, 180, 213, 0.12)", borderDash: [4, 4] },
+        },
+        x: {
+          ticks: { color: "#9ab4d5", maxRotation: 0, autoSkip: true, maxTicksLimit: 31 },
+          grid: { display: false },
+        },
+      },
+    },
+  });
+}
+
 function renderTable(items) {
   const tbody = document.querySelector("#dataTable tbody");
   tbody.innerHTML = "";
@@ -873,7 +1110,7 @@ function renderTable(items) {
   sorted.forEach((item) => {
     const row = document.createElement("tr");
     const statusClass = item.status === "Liquidado" ? "status-paid" : item.status === "Pendente" ? "status-pending" : "status-other";
-    const typeClass = item.type === "entrada" ? "type-income" : "type-expense";
+    const typeClass = item.type === "entrada" ? "type-income" : item.type === "saida" ? "type-expense" : "type-account";
 
     row.innerHTML = `
       <td>${escapeHtml(item.description)}</td>
@@ -901,21 +1138,46 @@ function renderDashboard() {
   const previousItems = getFilteredItems({ previous: true });
   const totals = calculateTotals(items);
   const previousTotals = calculateTotals(previousItems);
+  const accountsMode = isAccountsMode(items);
   const monthlyRows = aggregateMonthly(items);
   const saldoAtual = monthlyRows.length ? monthlyRows[monthlyRows.length - 1].saldo : totals.lucro;
   const previousSaldo = calculateTotals(previousItems).lucro;
   const activeAccounts = new Set(items.map((item) => item.source || item.category).filter(Boolean)).size;
-  getElement("cardTotal").textContent = formatCurrencyCompact(totals.receita);
-  getElement("cardMonth").textContent = formatCurrencyCompact(totals.despesa);
-  getElement("cardAverage").textContent = formatCurrencyCompact(totals.lucro);
-  getElement("cardBalance").textContent = formatCurrencyCompact(saldoAtual);
-  getElement("profitMarginText").textContent = `margem ${formatPercent(totals.margem)}`;
-  getElement("activeAccountsText").textContent = `${numberFormatter.format(activeAccounts)} contas ativas`;
+  updateModeLabels(accountsMode);
 
-  setTrendBadge("cardRevenueChange", totals.receita, previousTotals.receita);
-  setTrendBadge("cardExpenseChange", totals.despesa, previousTotals.despesa, { expense: true });
-  setTrendBadge("cardProfitChange", totals.lucro, previousTotals.lucro);
-  setTrendBadge("cardBalanceChange", saldoAtual, previousSaldo, { expense: saldoAtual < 0 });
+  if (accountsMode) {
+    const openCount = totals.pendente + totals.atrasado;
+    const paidPct = totals.count ? (totals.liquidado / totals.count) * 100 : 0;
+    const openPct = totals.count ? (openCount / totals.count) * 100 : 0;
+
+    getElement("cardTotal").textContent = formatCurrencyCompact(totals.totalAmount);
+    getElement("cardMonth").textContent = formatCurrencyCompact(totals.paidAmount);
+    getElement("cardAverage").textContent = formatCurrencyCompact(totals.openAmount);
+    getElement("cardBalance").textContent = numberFormatter.format(openCount);
+    getElement("profitMarginText").textContent = `${numberFormatter.format(totals.pendente)} pendentes`;
+    getElement("activeAccountsText").textContent = `${formatCurrencyCompact(totals.openAmount)} em aberto`;
+
+    getElement("cardRevenueChange").textContent = `${numberFormatter.format(totals.count)} contas`;
+    getElement("cardRevenueChange").className = "trend-pill";
+    getElement("cardExpenseChange").textContent = formatPercent(paidPct);
+    getElement("cardExpenseChange").className = "trend-pill";
+    getElement("cardProfitChange").textContent = formatPercent(openPct);
+    getElement("cardProfitChange").className = "trend-pill down";
+    getElement("cardBalanceChange").textContent = `${numberFormatter.format(openCount)} abertas`;
+    getElement("cardBalanceChange").className = "trend-pill warn";
+  } else {
+    getElement("cardTotal").textContent = formatCurrencyCompact(totals.receita);
+    getElement("cardMonth").textContent = formatCurrencyCompact(totals.despesa);
+    getElement("cardAverage").textContent = formatCurrencyCompact(totals.lucro);
+    getElement("cardBalance").textContent = formatCurrencyCompact(saldoAtual);
+    getElement("profitMarginText").textContent = `margem ${formatPercent(totals.margem)}`;
+    getElement("activeAccountsText").textContent = `${numberFormatter.format(activeAccounts)} contas ativas`;
+
+    setTrendBadge("cardRevenueChange", totals.receita, previousTotals.receita);
+    setTrendBadge("cardExpenseChange", totals.despesa, previousTotals.despesa, { expense: true });
+    setTrendBadge("cardProfitChange", totals.lucro, previousTotals.lucro);
+    setTrendBadge("cardBalanceChange", saldoAtual, previousSaldo, { expense: saldoAtual < 0 });
+  }
 
   renderMonthlyChart(items);
   renderStatusChart(items);
@@ -988,18 +1250,35 @@ function startAutoRefresh() {
 
 function exportCurrentData() {
   const items = getFilteredItems();
-  const headers = ["Data", "Descricao", "Tipo", "Categoria", "Fonte", "Status", "Receita", "Despesa", "Lucro"];
-  const rows = items.map((item) => [
-    item.date ? item.date.toLocaleDateString("pt-BR") : "",
-    item.description,
-    item.typeLabel,
-    item.category,
-    item.source,
-    item.status,
-    item.receita,
-    item.despesa,
-    item.lucro,
-  ]);
+  const accountsMode = isAccountsMode(items);
+  const headers = accountsMode
+    ? ["Data", "Descricao", "Classe", "Status", "Valor", "Pago", "Pendente"]
+    : ["Data", "Descricao", "Tipo", "Categoria", "Fonte", "Status", "Receita", "Despesa", "Lucro"];
+  const rows = items.map((item) => {
+    if (accountsMode) {
+      return [
+        item.date ? item.date.toLocaleDateString("pt-BR") : "",
+        item.description,
+        item.typeLabel,
+        item.status,
+        item.amount,
+        item.status === "Liquidado" ? item.amount : 0,
+        item.status !== "Liquidado" ? item.amount : 0,
+      ];
+    }
+
+    return [
+      item.date ? item.date.toLocaleDateString("pt-BR") : "",
+      item.description,
+      item.typeLabel,
+      item.category,
+      item.source,
+      item.status,
+      item.receita,
+      item.despesa,
+      item.lucro,
+    ];
+  });
 
   const csv = [headers, ...rows]
     .map((row) => row.map((value) => `"${String(value ?? "").replace(/"/g, '""')}"`).join(","))

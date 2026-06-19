@@ -486,6 +486,11 @@ svg {
   color: var(--expense);
 }
 
+.type-account {
+  background: rgba(154, 180, 213, 0.14);
+  color: var(--muted-strong);
+}
+
 .status-other {
   background: rgba(255, 182, 50, 0.14);
   color: var(--warning);
