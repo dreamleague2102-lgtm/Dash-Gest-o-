@@ -14,7 +14,7 @@
     <div>
       <p class="eyebrow">Planilha Google Sheets</p>
       <h1>Dashboard de Gestao</h1>
-      <p class="subtitle">Leitura executiva dos pagamentos, pendencias e evolucao mensal.</p>
+      <p class="subtitle">Receitas, despesas, lucro e saldo calculados direto da planilha.</p>
     </div>
     <div class="refresh-box">
       <span id="lastUpdate">Ultima atualizacao: --</span>
@@ -70,19 +70,19 @@
 
       <article class="month-metrics">
         <div>
-          <span>Pagos no mes</span>
+          <span>Receita no mes</span>
           <strong id="currentMonthPaid">--</strong>
         </div>
         <div>
-          <span>Pendentes no mes</span>
+          <span>Despesa no mes</span>
           <strong id="currentMonthPending">--</strong>
         </div>
         <div>
-          <span>Principal categoria</span>
+          <span>Margem do mes</span>
           <strong id="currentMonthTop">--</strong>
         </div>
         <div class="progress-wrap">
-          <span>Conclusao do mes</span>
+          <span>Receita x despesa</span>
           <div class="progress-track" aria-hidden="true">
             <div id="currentMonthProgress" class="progress-fill"></div>
           </div>
@@ -92,23 +92,23 @@
 
     <section class="kpi-grid" aria-label="Indicadores principais">
       <article class="kpi-card">
-        <span>Registros</span>
+        <span>Transacoes</span>
         <strong id="cardCount">--</strong>
       </article>
       <article class="kpi-card">
-        <span>Total filtrado</span>
+        <span>Receita</span>
         <strong id="cardTotal">--</strong>
       </article>
       <article class="kpi-card">
-        <span>Total do mes</span>
+        <span>Despesa</span>
         <strong id="cardMonth">--</strong>
       </article>
       <article class="kpi-card">
-        <span>Valor medio</span>
+        <span>Lucro</span>
         <strong id="cardAverage">--</strong>
       </article>
       <article class="kpi-card">
-        <span>Pagos</span>
+        <span>Margem</span>
         <strong id="cardPaid">--</strong>
       </article>
       <article class="kpi-card">
@@ -122,7 +122,7 @@
         <div class="panel-header">
           <div>
             <h2>Visao mensal</h2>
-            <p id="monthlyStats">Carregando dados mensais...</p>
+            <p id="monthlyStats">Carregando receitas, despesas e lucro por mes...</p>
           </div>
         </div>
         <div class="chart-box chart-box-large">
@@ -133,7 +133,7 @@
       <article class="panel">
         <div class="panel-header">
           <div>
-            <h2>Top categorias</h2>
+            <h2>Despesas por categoria</h2>
             <p id="categoryStats">Carregando categorias...</p>
           </div>
         </div>
@@ -145,7 +145,19 @@
       <article class="panel">
         <div class="panel-header">
           <div>
-            <h2>Pago x pendente</h2>
+            <h2>Receita por fonte</h2>
+            <p id="sourceStats">Carregando fontes...</p>
+          </div>
+        </div>
+        <div class="chart-box">
+          <canvas id="sourceChart"></canvas>
+        </div>
+      </article>
+
+      <article class="panel">
+        <div class="panel-header">
+          <div>
+            <h2>Status das contas</h2>
             <p id="statusStats">Carregando status...</p>
           </div>
         </div>
@@ -166,6 +178,7 @@
             <thead>
               <tr>
                 <th>Descricao</th>
+                <th>Tipo</th>
                 <th>Categoria</th>
                 <th>Mes</th>
                 <th>Status</th>

@@ -33,6 +33,11 @@ const currencyFormatter = new Intl.NumberFormat("pt-BR", {
 
 const numberFormatter = new Intl.NumberFormat("pt-BR");
 
+const percentFormatter = new Intl.NumberFormat("pt-BR", {
+  maximumFractionDigits: 1,
+  minimumFractionDigits: 1,
+});
+
 function normalizeText(value) {
   return String(value ?? "")
     .normalize("NFD")
@@ -47,6 +52,18 @@ function getElement(id) {
 
 function formatCurrency(value) {
   return currencyFormatter.format(Number(value) || 0);
+}
+
+function formatCurrencyCompact(value) {
+  return Number(value || 0).toLocaleString("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+    maximumFractionDigits: 0,
+  });
+}
+
+function formatPercent(value) {
+  return `${percentFormatter.format(Number(value) || 0)}%`;
 }
 
 function isValidDate(date) {
@@ -192,8 +209,8 @@ function isMonthColumn(key) {
 function buildStatus(value) {
   const normalized = normalizeText(value);
   if (!normalized) return "Pendente";
-  if (["pago", "quitado", "recebido", "sim", "ok", "concluido"].some((term) => normalized.includes(term))) {
-    return "Pago";
+  if (["pago", "quitado", "liquidado", "recebido", "sim", "ok", "concluido"].some((term) => normalized.includes(term))) {
+    return "Liquidado";
   }
   if (["atras", "vencido"].some((term) => normalized.includes(term))) {
     return "Atrasado";
@@ -202,6 +219,25 @@ function buildStatus(value) {
     return "Cancelado";
   }
   return "Pendente";
+}
+
+function buildType(value, amount, fallback = "saida") {
+  const normalized = normalizeText(value);
+
+  if (["entrada", "receita", "recebimento", "credito", "venda", "faturamento"].some((term) => normalized.includes(term))) {
+    return "entrada";
+  }
+
+  if (["saida", "despesa", "custo", "debito", "pagamento", "conta"].some((term) => normalized.includes(term))) {
+    return "saida";
+  }
+
+  if (Number(amount) < 0) return "saida";
+  return fallback;
+}
+
+function labelType(type) {
+  return type === "entrada" ? "Entrada" : "Saida";
 }
 
 function compact(value, fallback) {
@@ -214,8 +250,13 @@ function normalizeRows(rows) {
 
   const keys = Object.keys(rows[0]).filter(Boolean);
   const descKey = findKey(keys, ["descr", "descricao", "titulo", "cliente", "item", "nome", "name"]);
-  const categoryKey = findKey(keys, ["categoria", "category", "tipo", "grupo", "segmento"]);
-  const amountKey = findKey(keys, ["valor", "amount", "value", "total", "receita", "faturamento", "preco", "price"]);
+  const categoryKey = findKey(keys, ["categoria", "category", "grupo", "segmento", "departamento"]);
+  const typeKey = findKey(keys, ["tipo", "natureza", "movimento", "entrada saida", "entrada/saida"]);
+  const sourceKey = findKey(keys, ["fonte", "origem", "conta", "banco", "fornecedor", "cliente"]);
+  const revenueKey = findKey(keys, ["receita", "faturamento", "entrada"]);
+  const expenseKey = findKey(keys, ["despesa", "custo", "saida"]);
+  const hasSplitValues = Boolean(revenueKey && expenseKey);
+  const amountKey = findKey(keys, ["valor", "amount", "value", "total", "preco", "price"]);
   const statusKey = findKey(keys, ["status", "pago", "estado", "situacao"]);
   const dateKey = findKey(keys, ["data", "date", "vencimento", "pagamento", "lancamento"]);
   const monthKey = findKey(keys, ["mes", "competencia", "periodo"]);
@@ -235,13 +276,64 @@ function normalizeRows(rows) {
             rowIndex,
             descKey,
             categoryKey,
+            sourceKey,
+            typeKey,
             statusKey,
             amount,
             date: null,
             monthInfo,
+            fallbackType: buildType(typeKey ? row[typeKey] : "", amount),
           });
         })
         .filter(Boolean);
+    });
+  }
+
+  if (hasSplitValues) {
+    return rows.flatMap((row, rowIndex) => {
+      const date = dateKey ? parseDate(row[dateKey]) : null;
+      const monthInfo = date ? monthInfoFromDate(date) : monthKey ? monthInfoFromText(row[monthKey]) : null;
+      const entries = [];
+      const revenue = parseAmount(row[revenueKey]);
+      const expense = parseAmount(row[expenseKey]);
+
+      if (revenue !== 0) {
+        entries.push(
+          buildItem({
+            row,
+            rowIndex,
+            descKey,
+            categoryKey,
+            sourceKey,
+            typeKey,
+            statusKey,
+            amount: revenue,
+            date,
+            monthInfo,
+            fallbackType: "entrada",
+          })
+        );
+      }
+
+      if (expense !== 0) {
+        entries.push(
+          buildItem({
+            row,
+            rowIndex,
+            descKey,
+            categoryKey,
+            sourceKey,
+            typeKey,
+            statusKey,
+            amount: expense,
+            date,
+            monthInfo,
+            fallbackType: "saida",
+          })
+        );
+      }
+
+      return entries.filter(Boolean);
     });
   }
 
@@ -249,43 +341,58 @@ function normalizeRows(rows) {
     .map((row, rowIndex) => {
       const date = dateKey ? parseDate(row[dateKey]) : null;
       const monthInfo = date ? monthInfoFromDate(date) : monthKey ? monthInfoFromText(row[monthKey]) : null;
+      const amountValue = amountKey ? parseAmount(row[amountKey]) : revenueKey ? parseAmount(row[revenueKey]) : 0;
+      const fallbackType = revenueKey && !amountKey ? "entrada" : "saida";
 
       return buildItem({
         row,
         rowIndex,
         descKey,
         categoryKey,
+        sourceKey,
+        typeKey,
         statusKey,
-        amount: amountKey ? parseAmount(row[amountKey]) : 0,
+        amount: amountValue,
         date,
         monthInfo,
+        fallbackType,
       });
     })
     .filter(Boolean);
 }
 
-function buildItem({ row, rowIndex, descKey, categoryKey, statusKey, amount, date, monthInfo }) {
+function buildItem({ row, rowIndex, descKey, categoryKey, sourceKey, typeKey, statusKey, amount, date, monthInfo, fallbackType = "saida" }) {
   const description = compact(descKey ? row[descKey] : "", `Registro ${rowIndex + 1}`);
   const category = compact(categoryKey ? row[categoryKey] : "", "Sem categoria");
+  const source = compact(sourceKey ? row[sourceKey] : "", category);
   const status = buildStatus(statusKey ? row[statusKey] : "");
+  const type = buildType(typeKey ? row[typeKey] : "", amount, fallbackType);
+  const absoluteAmount = Math.abs(Number(amount) || 0);
   const resolvedMonth = monthInfo || monthInfoFromDate(date) || {
     key: "sem-mes",
     label: "Sem mes",
     sort: 999999,
   };
 
-  if (!description && !category && !amount) return null;
+  if (!description && !category && !absoluteAmount) return null;
 
   return {
     description,
     category,
+    source,
     status,
-    amount,
+    type,
+    typeLabel: labelType(type),
+    amount: absoluteAmount,
+    signedAmount: type === "entrada" ? absoluteAmount : -absoluteAmount,
+    receita: type === "entrada" ? absoluteAmount : 0,
+    despesa: type === "saida" ? absoluteAmount : 0,
+    lucro: type === "entrada" ? absoluteAmount : -absoluteAmount,
     date,
     monthKey: resolvedMonth.key,
     monthLabel: resolvedMonth.label,
     monthSort: resolvedMonth.sort,
-    searchable: normalizeText(`${description} ${category} ${status} ${resolvedMonth.label}`),
+    searchable: normalizeText(`${description} ${category} ${source} ${status} ${labelType(type)} ${resolvedMonth.label}`),
   };
 }
 
@@ -396,13 +503,54 @@ function aggregateBy(items, keyBuilder) {
   return Array.from(
     items.reduce((map, item) => {
       const key = keyBuilder(item);
-      const current = map.get(key.value) || { ...key, amount: 0, count: 0 };
+      const current = map.get(key.value) || { ...key, amount: 0, receita: 0, despesa: 0, lucro: 0, count: 0 };
       current.amount += item.amount;
+      current.receita += item.receita;
+      current.despesa += item.despesa;
+      current.lucro += item.lucro;
       current.count += 1;
       map.set(key.value, current);
       return map;
     }, new Map()).values()
   );
+}
+
+function calculateTotals(items) {
+  const totals = items.reduce(
+    (acc, item) => {
+      acc.receita += item.receita;
+      acc.despesa += item.despesa;
+      acc.lucro += item.lucro;
+      acc.count += 1;
+      if (item.status === "Liquidado") acc.liquidado += 1;
+      if (item.status === "Pendente") acc.pendente += 1;
+      if (item.status === "Atrasado") acc.atrasado += 1;
+      return acc;
+    },
+    { receita: 0, despesa: 0, lucro: 0, count: 0, liquidado: 0, pendente: 0, atrasado: 0 }
+  );
+
+  totals.margem = totals.receita ? (totals.lucro / totals.receita) * 100 : 0;
+  totals.saldo = totals.lucro;
+  return totals;
+}
+
+function aggregateMonthly(items) {
+  const grouped = aggregateBy(items, (item) => ({
+    value: item.monthKey,
+    label: item.monthLabel,
+    sort: item.monthSort,
+  })).sort((a, b) => a.sort - b.sort);
+
+  let saldo = 0;
+  return grouped.map((row) => {
+    saldo += row.lucro;
+    return {
+      ...row,
+      saldo,
+      margem: row.receita ? (row.lucro / row.receita) * 100 : 0,
+    };
+  });
 }
 
 function destroyChart(name) {
@@ -448,44 +596,33 @@ function updateCurrentMonthInsight(items) {
   const previousInfo = monthInfoFromOffset(-1);
   const currentItems = items.filter((item) => item.monthKey === currentInfo.key);
   const previousItems = items.filter((item) => item.monthKey === previousInfo.key);
-  const currentTotal = currentItems.reduce((sum, item) => sum + item.amount, 0);
-  const previousTotal = previousItems.reduce((sum, item) => sum + item.amount, 0);
-  const paidItems = currentItems.filter((item) => item.status === "Pago");
-  const pendingItems = currentItems.filter((item) => item.status !== "Pago");
-  const paidPercentage = currentItems.length ? (paidItems.length / currentItems.length) * 100 : 0;
-  const topCategory = aggregateBy(currentItems, (item) => ({ value: item.category, label: item.category, sort: 0 }))
-    .sort((a, b) => Math.abs(b.amount) - Math.abs(a.amount))[0];
+  const currentTotals = calculateTotals(currentItems);
+  const previousTotals = calculateTotals(previousItems);
+  const coverage = currentTotals.despesa ? (currentTotals.receita / currentTotals.despesa) * 100 : currentTotals.receita ? 100 : 0;
 
   getElement("currentMonthLabel").textContent = fullMonthLabel(new Date());
-  getElement("currentMonthTotal").textContent = formatCurrency(currentTotal);
-  setTrendText(getElement("currentMonthDelta"), currentTotal, previousTotal);
-  getElement("currentMonthPaid").textContent = numberFormatter.format(paidItems.length);
-  getElement("currentMonthPending").textContent = numberFormatter.format(pendingItems.length);
-  getElement("currentMonthTop").textContent = topCategory ? `${topCategory.label} (${formatCurrency(topCategory.amount)})` : "Sem dados";
-  getElement("currentMonthProgress").style.width = `${Math.min(100, Math.max(0, paidPercentage)).toFixed(1)}%`;
+  getElement("currentMonthTotal").textContent = formatCurrency(currentTotals.lucro);
+  setTrendText(getElement("currentMonthDelta"), currentTotals.lucro, previousTotals.lucro);
+  getElement("currentMonthPaid").textContent = formatCurrencyCompact(currentTotals.receita);
+  getElement("currentMonthPending").textContent = formatCurrencyCompact(currentTotals.despesa);
+  getElement("currentMonthTop").textContent = formatPercent(currentTotals.margem);
+  getElement("currentMonthProgress").style.width = `${Math.min(100, Math.max(0, coverage)).toFixed(1)}%`;
 }
 
 function renderMonthlyChart(items) {
   const currentMonthKey = monthInfoFromOffset(0).key;
-  const grouped = aggregateBy(items, (item) => ({
-    value: item.monthKey,
-    label: item.monthLabel,
-    sort: item.monthSort,
-  })).sort((a, b) => a.sort - b.sort);
+  const grouped = aggregateMonthly(items);
 
   const labels = grouped.map((item) => item.label);
-  const amounts = grouped.map((item) => item.amount);
-  const average = amounts.length ? amounts.reduce((sum, value) => sum + value, 0) / amounts.length : 0;
-  const cumulative = amounts.reduce((list, value, index) => {
-    list.push((list[index - 1] || 0) + value);
-    return list;
-  }, []);
-  const averageLine = grouped.map(() => average);
+  const receitas = grouped.map((item) => item.receita);
+  const despesas = grouped.map((item) => item.despesa);
+  const lucros = grouped.map((item) => item.lucro);
+  const saldos = grouped.map((item) => item.saldo);
+  const totals = calculateTotals(items);
+  const bestMonth = grouped.slice().sort((a, b) => b.lucro - a.lucro)[0];
 
-  const total = amounts.reduce((sum, value) => sum + value, 0);
-  const biggest = grouped.slice().sort((a, b) => Math.abs(b.amount) - Math.abs(a.amount))[0];
   getElement("monthlyStats").textContent = grouped.length
-    ? `${grouped.length} mes(es), total ${formatCurrency(total)}. Maior mes: ${biggest.label} (${formatCurrency(biggest.amount)}).`
+    ? `${grouped.length} mes(es), lucro total ${formatCurrency(totals.lucro)}. Melhor mes: ${bestMonth.label} (${formatCurrency(bestMonth.lucro)}).`
     : "Nenhum mes encontrado nos filtros atuais.";
 
   destroyChart("monthly");
@@ -495,32 +632,42 @@ function renderMonthlyChart(items) {
       datasets: [
         {
           type: "bar",
-          label: "Total mensal",
-          data: amounts,
-          backgroundColor: grouped.map((item) => (item.value === currentMonthKey ? "rgba(246, 180, 75, 0.95)" : "rgba(45, 212, 191, 0.74)")),
-          borderColor: grouped.map((item) => (item.value === currentMonthKey ? "#f6b44b" : "#2dd4bf")),
+          label: "Receita",
+          data: receitas,
+          backgroundColor: grouped.map((item) => (item.value === currentMonthKey ? "rgba(45, 212, 191, 0.96)" : "rgba(45, 212, 191, 0.58)")),
+          borderColor: "#2dd4bf",
+          borderWidth: 1,
+          borderRadius: 6,
+        },
+        {
+          type: "bar",
+          label: "Despesa",
+          data: despesas,
+          backgroundColor: grouped.map((item) => (item.value === currentMonthKey ? "rgba(251, 113, 133, 0.92)" : "rgba(251, 113, 133, 0.52)")),
+          borderColor: "#fb7185",
           borderWidth: 1,
           borderRadius: 6,
         },
         {
           type: "line",
-          label: "Acumulado",
-          data: cumulative,
-          borderColor: "#a78bfa",
-          backgroundColor: "rgba(167, 139, 250, 0.14)",
+          label: "Lucro",
+          data: lucros,
+          borderColor: "#f6b44b",
+          backgroundColor: "rgba(246, 180, 75, 0.12)",
           tension: 0.28,
           pointRadius: 4,
-          pointBackgroundColor: "#a78bfa",
+          pointBackgroundColor: "#f6b44b",
           fill: false,
         },
         {
           type: "line",
-          label: "Media mensal",
-          data: averageLine,
-          borderColor: "#95a3b8",
-          borderDash: [6, 6],
-          borderWidth: 1.5,
-          pointRadius: 0,
+          label: "Saldo",
+          data: saldos,
+          borderColor: "#a78bfa",
+          backgroundColor: "rgba(167, 139, 250, 0.12)",
+          borderWidth: 2,
+          pointRadius: 3,
+          pointBackgroundColor: "#a78bfa",
           fill: false,
         },
       ],
@@ -560,12 +707,13 @@ function renderMonthlyChart(items) {
 
 function renderCategoryChart(items) {
   const grouped = aggregateBy(items, (item) => ({ value: item.category, label: item.category, sort: 0 }))
-    .sort((a, b) => Math.abs(b.amount) - Math.abs(a.amount))
+    .filter((item) => item.despesa > 0)
+    .sort((a, b) => b.despesa - a.despesa)
     .slice(0, 10);
 
   getElement("categoryStats").textContent = grouped.length
-    ? `Maior categoria: ${grouped[0].label} (${formatCurrency(grouped[0].amount)}).`
-    : "Nenhuma categoria nos filtros atuais.";
+    ? `Maior despesa: ${grouped[0].label} (${formatCurrency(grouped[0].despesa)}).`
+    : "Nenhuma despesa nos filtros atuais.";
 
   destroyChart("category");
   state.charts.category = new Chart(getElement("categoryChart"), {
@@ -575,9 +723,57 @@ function renderCategoryChart(items) {
       datasets: [
         {
           label: "Valor",
-          data: grouped.map((item) => item.amount),
-          backgroundColor: "rgba(74, 222, 128, 0.82)",
-          borderColor: "#4ade80",
+          data: grouped.map((item) => item.despesa),
+          backgroundColor: "rgba(251, 113, 133, 0.72)",
+          borderColor: "#fb7185",
+          borderWidth: 1,
+          borderRadius: 6,
+        },
+      ],
+    },
+    options: {
+      indexAxis: "y",
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: (context) => formatCurrency(context.parsed.x) } },
+      },
+      scales: {
+        x: {
+          ticks: { color: "#95a3b8", callback: (value) => formatCurrency(value) },
+          grid: { color: "rgba(149, 163, 184, 0.16)" },
+        },
+        y: {
+          ticks: { color: "#c2ccda" },
+          grid: { display: false },
+        },
+      },
+    },
+  });
+}
+
+function renderSourceChart(items) {
+  const grouped = aggregateBy(items, (item) => ({ value: item.source, label: item.source, sort: 0 }))
+    .filter((item) => item.receita > 0)
+    .sort((a, b) => b.receita - a.receita)
+    .slice(0, 8);
+
+  getElement("sourceStats").textContent = grouped.length
+    ? `Principal fonte: ${grouped[0].label} (${formatCurrency(grouped[0].receita)}).`
+    : "Nenhuma receita nos filtros atuais.";
+
+  destroyChart("source");
+  state.charts.source = new Chart(getElement("sourceChart"), {
+    type: "bar",
+    data: {
+      labels: grouped.map((item) => item.label),
+      datasets: [
+        {
+          label: "Receita",
+          data: grouped.map((item) => item.receita),
+          backgroundColor: "rgba(45, 212, 191, 0.78)",
+          borderColor: "#2dd4bf",
           borderWidth: 1,
           borderRadius: 6,
         },
@@ -610,7 +806,7 @@ function renderStatusChart(items) {
     a.label.localeCompare(b.label, "pt-BR")
   );
 
-  const paid = grouped.find((item) => item.label === "Pago")?.count || 0;
+  const paid = grouped.find((item) => item.label === "Liquidado")?.count || 0;
   const total = items.length || 1;
   getElement("statusStats").textContent = `${paid} de ${items.length} registro(s) pagos (${((paid / total) * 100).toFixed(1)}%).`;
 
@@ -657,21 +853,23 @@ function renderTable(items) {
 
   if (!sorted.length) {
     const row = document.createElement("tr");
-    row.innerHTML = '<td colspan="5" class="empty-cell">Nenhum registro encontrado.</td>';
+    row.innerHTML = '<td colspan="6" class="empty-cell">Nenhum registro encontrado.</td>';
     tbody.appendChild(row);
     return;
   }
 
   sorted.forEach((item) => {
     const row = document.createElement("tr");
-    const statusClass = item.status === "Pago" ? "status-paid" : item.status === "Pendente" ? "status-pending" : "status-other";
+    const statusClass = item.status === "Liquidado" ? "status-paid" : item.status === "Pendente" ? "status-pending" : "status-other";
+    const typeClass = item.type === "entrada" ? "type-income" : "type-expense";
 
     row.innerHTML = `
       <td>${escapeHtml(item.description)}</td>
+      <td><span class="type-pill ${typeClass}">${escapeHtml(item.typeLabel)}</span></td>
       <td>${escapeHtml(item.category)}</td>
       <td>${escapeHtml(item.monthLabel)}</td>
       <td><span class="status-pill ${statusClass}">${escapeHtml(item.status)}</span></td>
-      <td>${formatCurrency(item.amount)}</td>
+      <td>${formatSignedCurrency(item.signedAmount)}</td>
     `;
     tbody.appendChild(row);
   });
@@ -689,23 +887,20 @@ function escapeHtml(value) {
 function renderDashboard() {
   const items = getFilteredItems();
   const currentMonthBaseItems = getFilteredItems({ ignoreMonth: true });
-  const total = items.reduce((sum, item) => sum + item.amount, 0);
-  const average = items.length ? total / items.length : 0;
-  const currentMonthKey = monthInfoFromDate(new Date()).key;
-  const monthTotal = items.filter((item) => item.monthKey === currentMonthKey).reduce((sum, item) => sum + item.amount, 0);
-  const paidCount = items.filter((item) => item.status === "Pago").length;
-  const pendingCount = items.filter((item) => item.status !== "Pago").length;
+  const totals = calculateTotals(items);
+  const pendingCount = items.filter((item) => item.status !== "Liquidado").length;
 
   getElement("cardCount").textContent = numberFormatter.format(items.length);
-  getElement("cardTotal").textContent = formatCurrency(total);
-  getElement("cardMonth").textContent = formatCurrency(monthTotal);
-  getElement("cardAverage").textContent = formatCurrency(average);
-  getElement("cardPaid").textContent = numberFormatter.format(paidCount);
+  getElement("cardTotal").textContent = formatCurrencyCompact(totals.receita);
+  getElement("cardMonth").textContent = formatCurrencyCompact(totals.despesa);
+  getElement("cardAverage").textContent = formatCurrencyCompact(totals.lucro);
+  getElement("cardPaid").textContent = formatPercent(totals.margem);
   getElement("cardPending").textContent = numberFormatter.format(pendingCount);
 
   updateCurrentMonthInsight(currentMonthBaseItems);
   renderMonthlyChart(items);
   renderCategoryChart(items);
+  renderSourceChart(items);
   renderStatusChart(items);
   renderTable(items);
 }

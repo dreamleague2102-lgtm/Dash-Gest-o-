@@ -24,16 +24,24 @@ O dashboard reconhece automaticamente nomes comuns de colunas.
 Formato por linhas:
 
 ```text
-Data | Descricao | Categoria | Status | Valor
+Data | Descricao | Tipo | Categoria | Fonte | Status | Valor
+```
+
+Use `Tipo` como `Entrada` ou `Saida`. Tambem funciona usar `Receita` e `Despesa` em colunas separadas:
+
+```text
+Data | Descricao | Categoria | Fonte | Status | Receita | Despesa
 ```
 
 Formato com meses em colunas:
 
 ```text
-Descricao | Categoria | Jan | Fev | Mar | Abr | Mai | Jun | Jul | Ago | Set | Out | Nov | Dez
+Descricao | Tipo | Categoria | Jan | Fev | Mar | Abr | Mai | Jun | Jul | Ago | Set | Out | Nov | Dez
 ```
 
-Status como `Pago`, `Pendente`, `Recebido`, `Quitado` e semelhantes sao agrupados automaticamente.
+Status como `Pago`, `Liquidado`, `Pendente`, `Recebido`, `Quitado` e semelhantes sao agrupados automaticamente.
+
+Se a planilha tiver apenas `Valor`, sem coluna `Tipo`, o dashboard considera os registros como `Saida` para continuar funcionando com planilhas de contas a pagar.
 
 ## Deploy no Vercel
 

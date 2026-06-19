@@ -381,7 +381,7 @@ h1 {
 
 #dataTable {
   width: 100%;
-  min-width: 760px;
+  min-width: 880px;
   border-collapse: collapse;
 }
 
@@ -419,7 +419,8 @@ h1 {
   background: #202734;
 }
 
-.status-pill {
+.status-pill,
+.type-pill {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -429,6 +430,16 @@ h1 {
   border-radius: 999px;
   font-size: 0.78rem;
   font-weight: 800;
+}
+
+.type-income {
+  background: rgba(45, 212, 191, 0.14);
+  color: var(--primary);
+}
+
+.type-expense {
+  background: rgba(251, 113, 133, 0.14);
+  color: var(--danger);
 }
 
 .status-paid {
