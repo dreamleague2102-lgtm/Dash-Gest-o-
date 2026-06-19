@@ -355,6 +355,47 @@ function aggregateMonthly(items) {
     .sort((a, b) => a.sort - b.sort);
 }
 
+function monthKeyFromParts(year, monthIndex) {
+  return `${year}-${String(monthIndex + 1).padStart(2, "0")}`;
+}
+
+function yearFromMonthKey(monthKey) {
+  const year = Number(String(monthKey).slice(0, 4));
+  return Number.isFinite(year) && year > 0 ? year : new Date().getFullYear();
+}
+
+function resolveChartYear(items) {
+  const selectedMonth = getElement("periodFilter").value;
+  if (selectedMonth !== "all") return yearFromMonthKey(selectedMonth);
+
+  const rows = aggregateMonthly(items.length ? items : state.items);
+  const latest = rows[rows.length - 1];
+  return latest ? Math.floor(latest.sort / 12) : new Date().getFullYear();
+}
+
+function buildYearMonthRows(items, year) {
+  const monthMap = new Map(aggregateMonthly(items).map((row) => [row.value, row]));
+
+  return monthCatalog.map((month) => {
+    const key = monthKeyFromParts(year, month.index);
+    const current = monthMap.get(key);
+
+    return {
+      value: key,
+      label: month.label,
+      displayLabel: `${month.label} ${year}`,
+      sort: year * 12 + month.index,
+      totalAmount: current ? current.totalAmount : 0,
+      paidAmount: current ? current.paidAmount : 0,
+      openAmount: current ? current.openAmount : 0,
+      receita: current ? current.receita : 0,
+      despesa: current ? current.despesa : 0,
+      lucro: current ? current.lucro : 0,
+      count: current ? current.count : 0,
+    };
+  });
+}
+
 function updateMonthFilters(items) {
   const months = aggregateMonthly(items).sort((a, b) => b.sort - a.sort);
   const periodFilter = getElement("periodFilter");
@@ -480,12 +521,21 @@ function renderDashboard() {
 }
 
 function renderMonthlyChart(items, accountsMode) {
-  const rows = aggregateMonthly(items);
-  const labels = rows.map((row) => row.displayLabel);
+  const activeYear = resolveChartYear(items);
+  const rows = buildYearMonthRows(items, activeYear);
+  const hasValues = rows.some((row) => row.count > 0);
+  const labels = rows.map((row) => row.label);
   const firstData = rows.map((row) => (accountsMode ? row.paidAmount : row.receita));
   const secondData = rows.map((row) => (accountsMode ? row.openAmount : row.despesa));
 
-  setText("monthlyStats", rows.length ? `Comparativo mensal - ${getSelectedMonthLabel()}` : "Nenhum mes encontrado.");
+  setText(
+    "monthlyStats",
+    hasValues
+      ? getElement("periodFilter").value === "all"
+        ? `Comparativo mensal - ${activeYear}`
+        : `Comparativo mensal - ${getSelectedMonthLabel()}`
+      : `Comparativo mensal - ${activeYear}`
+  );
 
   destroyChart("monthly");
   state.charts.monthly = new Chart(getElement("monthlyChart"), {
@@ -498,16 +548,22 @@ function renderMonthlyChart(items, accountsMode) {
           data: firstData,
           backgroundColor: "rgba(72, 213, 151, 0.9)",
           borderColor: "#48d597",
-          borderWidth: 1,
-          borderRadius: 5,
+          borderSkipped: false,
+          borderWidth: 0,
+          borderRadius: 6,
+          barPercentage: 0.74,
+          categoryPercentage: 0.74,
         },
         {
           label: accountsMode ? "Pendentes" : "Despesa",
           data: secondData,
           backgroundColor: "rgba(255, 79, 94, 0.9)",
           borderColor: "#ff4f5e",
-          borderWidth: 1,
-          borderRadius: 5,
+          borderSkipped: false,
+          borderWidth: 0,
+          borderRadius: 6,
+          barPercentage: 0.74,
+          categoryPercentage: 0.74,
         },
       ],
     },
@@ -520,7 +576,9 @@ function renderMonthlyChart(items, accountsMode) {
       },
       scales: {
         y: {
-          ticks: { color: "#9ab4d5", callback: (value) => formatAxisCurrency(value) },
+          beginAtZero: true,
+          grace: "8%",
+          ticks: { color: "#9ab4d5", maxTicksLimit: 5, callback: (value) => formatAxisCurrency(value) },
           grid: { color: chartGridColor() },
         },
         x: { ticks: { color: "#9ab4d5" }, grid: { display: false } },
@@ -624,15 +682,16 @@ function renderAccumulatedChart(items, accountsMode) {
 }
 
 function buildMonthlyAccumulatedRows(items, accountsMode) {
+  const activeYear = resolveChartYear(items);
   let first = 0;
   let second = 0;
   let third = 0;
 
-  return aggregateMonthly(items).map((row) => {
+  return buildYearMonthRows(items, activeYear).map((row) => {
     first += accountsMode ? row.paidAmount : row.receita;
     second += accountsMode ? row.openAmount : row.despesa;
     third += accountsMode ? row.totalAmount : row.lucro;
-    return { label: row.displayLabel, first, second, third };
+    return { label: row.label, first, second, third };
   });
 }
 
