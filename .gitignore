@@ -1,0 +1,4 @@
+.vscode/
+.vercel/
+node_modules/
+*.log

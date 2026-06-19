@@ -1,0 +1,9 @@
+.github/
+.vscode/
+Default/
+dashboard/
+.git/
+junio.ipynb
+main.py
+Procfile
+codigo.py

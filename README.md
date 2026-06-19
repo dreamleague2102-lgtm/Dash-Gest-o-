@@ -43,8 +43,9 @@ Status como `Pago`, `Pendente`, `Recebido`, `Quitado` e semelhantes sao agrupado
 4. Importe o repositorio `dreamleague2102-lgtm/Dash-Gest-o-`.
 5. Framework: `Other`.
 6. Build Command: deixe vazio.
-7. Output Directory: deixe vazio ou use `.`.
-8. Clique em `Deploy`.
+7. Install Command: deixe vazio.
+8. Output Directory: deixe vazio ou use `.`.
+9. Clique em `Deploy`.
 
 Depois do deploy, quando a planilha for alterada, o dashboard atualiza sozinho a cada 60 segundos. O botao `Atualizar` tambem busca os dados na hora.
 
