@@ -1,381 +1,704 @@
-const sheetCsvUrl = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vStSGzixWpI1OvPxRAhv4HC33dNCJ3p4Yk4c2dnJLM43FiwcrIqe79z8HJcVahSXTA3pkQ1xZ1qttRH/pub?gid=433514608&single=true&output=csv';
+const SHEET_ID = "18TbxyCQ-bdEp8vs2bsxqo9zRZ-mritYvLa7Twwpsa1U";
+const SHEET_GID = "433514608";
+const DIRECT_CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&gid=${SHEET_GID}`;
+const AUTO_REFRESH_SECONDS = 60;
 
-let barChart = null;
-let donutChart = null;
-let lineChart = null;
-let performanceChart = null;
-let monthlyChart = null;
+const state = {
+  items: [],
+  charts: {},
+  countdownTimer: null,
+  autoRefreshTimer: null,
+  countdownRemaining: AUTO_REFRESH_SECONDS,
+};
 
-function normalizeKey(k) {
-  return (k || '').toString().trim().toLowerCase();
+const monthCatalog = [
+  { index: 0, label: "Jan", aliases: ["jan", "janeiro"] },
+  { index: 1, label: "Fev", aliases: ["fev", "fevereiro"] },
+  { index: 2, label: "Mar", aliases: ["mar", "marco"] },
+  { index: 3, label: "Abr", aliases: ["abr", "abril"] },
+  { index: 4, label: "Mai", aliases: ["mai", "maio"] },
+  { index: 5, label: "Jun", aliases: ["jun", "junho"] },
+  { index: 6, label: "Jul", aliases: ["jul", "julho"] },
+  { index: 7, label: "Ago", aliases: ["ago", "agosto"] },
+  { index: 8, label: "Set", aliases: ["set", "setembro"] },
+  { index: 9, label: "Out", aliases: ["out", "outubro"] },
+  { index: 10, label: "Nov", aliases: ["nov", "novembro"] },
+  { index: 11, label: "Dez", aliases: ["dez", "dezembro"] },
+];
+
+const currencyFormatter = new Intl.NumberFormat("pt-BR", {
+  style: "currency",
+  currency: "BRL",
+});
+
+const numberFormatter = new Intl.NumberFormat("pt-BR");
+
+function normalizeText(value) {
+  return String(value ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toLowerCase();
 }
 
-function findKey(keys, candidates) {
-  for (const candidate of candidates) {
-    const found = keys.find(k => normalizeKey(k).includes(candidate));
-    if (found) return found;
-  }
-  return null;
+function getElement(id) {
+  return document.getElementById(id);
 }
 
 function formatCurrency(value) {
-  return Number(value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+  return currencyFormatter.format(Number(value) || 0);
 }
 
-function buildStatusLabel(status) {
-  if (!status) return 'Pendente';
-  return status.toLowerCase().includes('pago') ? 'Pago' : 'Pendente';
+function isValidDate(date) {
+  return date instanceof Date && !Number.isNaN(date.getTime());
 }
 
-function safeDestroy(chart) {
-  if (chart && typeof chart.destroy === 'function') {
-    chart.destroy();
-  }
+function findKey(keys, candidates) {
+  return keys.find((key) => {
+    const normalizedKey = normalizeText(key);
+    return candidates.some((candidate) => normalizedKey.includes(candidate));
+  });
 }
 
-function renderData(rows) {
-  if (!rows || rows.length === 0) {
-    alert('Planilha vazia ou não disponível. Verifique permissões/publicação.');
-    return;
-  }
+function parseAmount(value) {
+  if (typeof value === "number") return value;
 
-  const keys = Object.keys(rows[0]);
-  const descKey = findKey(keys, ['descr', 'description', 'titulo', 'item', 'name']);
-  const categoryKey = findKey(keys, ['categoria', 'category', 'tipo', 'segmento', 'grupo']);
-  const amountKey = findKey(keys, ['valor', 'amount', 'value', 'total', 'price']);
-  const statusKey = findKey(keys, ['status', 'pago', 'estado']);
-  const dateKey = findKey(keys, ['data', 'date']);
+  const original = String(value ?? "").trim();
+  if (!original) return 0;
 
-  const parsed = rows.map(row => ({
-    desc: descKey ? row[descKey] : 'Item',
-    category: categoryKey ? row[categoryKey] : null,
-    amount: amountKey ? parseFloat((row[amountKey] || '').toString().replace(/[^0-9-,.]/g, '').replace(/,/g, '.')) || 0 : 0,
-    status: statusKey ? (row[statusKey] || '').toString().trim().toLowerCase() : '',
-    date: dateKey ? new Date(row[dateKey]) : null
-  })).filter(item => item.amount !== 0 || item.desc);
+  const isNegative = original.includes("-") || /^\(.+\)$/.test(original);
+  let cleaned = original.replace(/[^\d,.-]/g, "");
 
-  const totalItems = parsed.length;
-  const now = new Date();
-  const monthSum = parsed.reduce((sum, item) => {
-    if (item.date && item.date.getMonth() === now.getMonth() && item.date.getFullYear() === now.getFullYear()) {
-      return sum + item.amount;
+  if (cleaned.includes(",") && cleaned.includes(".")) {
+    if (cleaned.lastIndexOf(",") > cleaned.lastIndexOf(".")) {
+      cleaned = cleaned.replace(/\./g, "").replace(",", ".");
+    } else {
+      cleaned = cleaned.replace(/,/g, "");
     }
-    return sum;
-  }, 0);
-  const balance = parsed.reduce((sum, item) => sum + item.amount, 0);
-  const paidCount = parsed.filter(item => item.status.includes('pago')).length;
-  const pendingCount = totalItems - paidCount;
+  } else if (cleaned.includes(",")) {
+    cleaned = cleaned.replace(/\./g, "").replace(",", ".");
+  } else if (cleaned.includes(".")) {
+    const parts = cleaned.split(".");
+    const integerPart = parts[0].replace("-", "");
+    const decimalPart = parts[parts.length - 1];
 
-  const averageValue = totalItems > 0 ? balance / totalItems : 0;
-  const uniqueDates = [...new Set(parsed.filter(item => item.date && !isNaN(item.date)).map(item => item.date.toISOString().slice(0,10)))];
-  const dailyAverage = uniqueDates.length > 0 ? parsed.reduce((sum, item) => sum + item.amount, 0) / uniqueDates.length : 0;
+    if (parts.length > 2 || (decimalPart.length === 3 && integerPart.length <= 3)) {
+      cleaned = cleaned.replace(/\./g, "");
+    }
+  }
 
-  document.getElementById('card-count').innerText = totalItems;
-  document.getElementById('card-month').innerText = formatCurrency(monthSum);
-  document.getElementById('card-balance').innerText = formatCurrency(balance);
-  document.getElementById('card-average').innerText = formatCurrency(averageValue);
-  document.getElementById('card-paid').innerText = paidCount;
-  document.getElementById('card-pending').innerText = pendingCount;
-  document.getElementById('summaryDailyAverage').innerText = formatCurrency(dailyAverage);
-  document.getElementById('lastUpdate').innerText = `Última atualização: ${now.toLocaleString('pt-BR')}`;
+  cleaned = cleaned.replace(/(?!^)-/g, "");
+  const parsed = Number.parseFloat(cleaned);
+  if (Number.isNaN(parsed)) return 0;
+  return isNegative ? -Math.abs(parsed) : parsed;
+}
 
-  const categoryMap = parsed.reduce((map, item) => {
-    const category = item.category || item.desc || 'Outros';
-    map[category] = (map[category] || 0) + item.amount;
-    return map;
-  }, {});
-  const sortedCategories = Object.entries(categoryMap)
-    .sort(([, a], [, b]) => b - a)
-    .slice(0, 10);
-  const categoryLabels = sortedCategories.map(([label]) => label);
-  const categoryValues = sortedCategories.map(([, value]) => value);
+function parseDate(value) {
+  if (isValidDate(value)) return value;
+  if (typeof value === "number" && value > 20000) {
+    return new Date(Math.round((value - 25569) * 86400 * 1000));
+  }
 
-  document.getElementById('summaryCategoryCount').innerText = sortedCategories.length;
+  const text = String(value ?? "").trim();
+  if (!text) return null;
 
-  const categoryList = sortedCategories.slice(0, 3).map(([name, value]) => `${name}: ${formatCurrency(value)}`).join(' • ') || 'Sem categorias definidas';
-  document.getElementById('categoryStats').innerText = `Top categorias: ${categoryList}`;
+  const isoMatch = text.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (isoMatch) {
+    const year = Number(isoMatch[1]);
+    const month = Number(isoMatch[2]) - 1;
+    const day = Number(isoMatch[3]);
+    const date = new Date(year, month, day);
+    return isValidDate(date) ? date : null;
+  }
 
-  const monthlyAmounts = parsed.reduce((map, item) => {
-    if (!item.date || isNaN(item.date)) return map;
-    const month = item.date.toLocaleString('pt-BR', { month: 'short', year: 'numeric' });
-    map[month] = (map[month] || 0) + item.amount;
-    return map;
-  }, {});
-  const monthLabels = Object.keys(monthlyAmounts).sort((a, b) => new Date(a) - new Date(b));
-  const monthValues = monthLabels.map(month => monthlyAmounts[month]);
-  document.getElementById('monthlyStats').innerText = `Receita total nos últimos ${monthLabels.length} meses: ${formatCurrency(monthValues.reduce((sum, value) => sum + value, 0))}`;
+  const dateMatch = text.match(/^(\d{1,2})[/. -](\d{1,2})[/. -](\d{2,4})$/);
+  if (dateMatch) {
+    const day = Number(dateMatch[1]);
+    const month = Number(dateMatch[2]) - 1;
+    const year = Number(dateMatch[3].length === 2 ? `20${dateMatch[3]}` : dateMatch[3]);
+    const date = new Date(year, month, day);
+    return isValidDate(date) ? date : null;
+  }
 
-  const statusMap = parsed.reduce((map, item) => {
-    const label = buildStatusLabel(item.status);
-    map[label] = (map[label] || 0) + 1;
-    return map;
-  }, {});
-  const statusLabels = ['Pago', 'Pendente'];
-  const statusValues = [statusMap['Pago'] || 0, statusMap['Pendente'] || 0];
+  const monthYearMatch = text.match(/^(\d{1,2})[/. -](\d{2,4})$/);
+  if (monthYearMatch) {
+    const month = Number(monthYearMatch[1]) - 1;
+    const year = Number(monthYearMatch[2].length === 2 ? `20${monthYearMatch[2]}` : monthYearMatch[2]);
+    const date = new Date(year, month, 1);
+    return isValidDate(date) ? date : null;
+  }
 
-  const categoryByAmount = sortedCategories.map(([category, amount]) => ({
-    category,
-    amount,
-    percentage: balance !== 0 ? (amount / balance) * 100 : 0
-  }));
+  if (/[a-zA-Z]/.test(text)) {
+    const parsed = new Date(text);
+    return isValidDate(parsed) ? parsed : null;
+  }
 
-  const topCategory = categoryByAmount[0] || { category: 'Nenhuma', amount: 0, percentage: 0 };
-  document.getElementById('summaryTopCategory').innerText = `${topCategory.category} — ${formatCurrency(topCategory.amount)} (${topCategory.percentage.toFixed(1)}%)`;
+  return null;
+}
 
-  const pendingRows = parsed.filter(item => buildStatusLabel(item.status) === 'Pendente');
-  const tbody = document.querySelector('#dataTable tbody');
-  tbody.innerHTML = '';
+function monthInfoFromDate(date) {
+  if (!isValidDate(date)) return null;
+  const year = date.getFullYear();
+  const month = date.getMonth();
+  const meta = monthCatalog[month];
 
-  if (pendingRows.length === 0) {
-    const tr = document.createElement('tr');
-    tr.innerHTML = `<td colspan="3" style="text-align:center;color:#6f7d95;padding:18px">Nenhuma conta pendente encontrada.</td>`;
-    tbody.appendChild(tr);
-  } else {
-    pendingRows.slice(0, 50).forEach(item => {
-      const tr = document.createElement('tr');
-      tr.innerHTML = `<td>${item.desc}</td><td>${buildStatusLabel(item.status)}</td><td>${formatCurrency(item.amount)}</td>`;
-      tbody.appendChild(tr);
+  return {
+    key: `${year}-${String(month + 1).padStart(2, "0")}`,
+    label: `${meta.label}/${year}`,
+    sort: year * 12 + month,
+  };
+}
+
+function monthInfoFromText(value) {
+  const text = normalizeText(value);
+  if (!text) return null;
+
+  const parsedDate = parseDate(value);
+  if (parsedDate) return monthInfoFromDate(parsedDate);
+
+  const yearMatch = text.match(/(19\d{2}|20\d{2})/);
+  const year = yearMatch ? Number(yearMatch[1]) : new Date().getFullYear();
+
+  const found = monthCatalog.find((month) =>
+    month.aliases.some((alias) => {
+      return (
+        text === alias ||
+        text.startsWith(`${alias} `) ||
+        text.startsWith(`${alias}/`) ||
+        text.startsWith(`${alias}-`) ||
+        text.includes(` ${alias} `) ||
+        text.endsWith(` ${alias}`) ||
+        text.includes(` ${alias}/`) ||
+        text.includes(` ${alias}-`)
+      );
+    })
+  );
+
+  if (!found) return null;
+
+  return {
+    key: `${year}-${String(found.index + 1).padStart(2, "0")}`,
+    label: `${found.label}/${year}`,
+    sort: year * 12 + found.index,
+  };
+}
+
+function isMonthColumn(key) {
+  const normalized = normalizeText(key);
+  if (!normalized || normalized.includes("status") || normalized.includes("data")) return false;
+  return Boolean(monthInfoFromText(key));
+}
+
+function buildStatus(value) {
+  const normalized = normalizeText(value);
+  if (!normalized) return "Pendente";
+  if (["pago", "quitado", "recebido", "sim", "ok", "concluido"].some((term) => normalized.includes(term))) {
+    return "Pago";
+  }
+  if (["atras", "vencido"].some((term) => normalized.includes(term))) {
+    return "Atrasado";
+  }
+  if (["cancel"].some((term) => normalized.includes(term))) {
+    return "Cancelado";
+  }
+  return "Pendente";
+}
+
+function compact(value, fallback) {
+  const text = String(value ?? "").trim();
+  return text || fallback;
+}
+
+function normalizeRows(rows) {
+  if (!rows.length) return [];
+
+  const keys = Object.keys(rows[0]).filter(Boolean);
+  const descKey = findKey(keys, ["descr", "descricao", "titulo", "cliente", "item", "nome", "name"]);
+  const categoryKey = findKey(keys, ["categoria", "category", "tipo", "grupo", "segmento"]);
+  const amountKey = findKey(keys, ["valor", "amount", "value", "total", "receita", "faturamento", "preco", "price"]);
+  const statusKey = findKey(keys, ["status", "pago", "estado", "situacao"]);
+  const dateKey = findKey(keys, ["data", "date", "vencimento", "pagamento", "lancamento"]);
+  const monthKey = findKey(keys, ["mes", "competencia", "periodo"]);
+  const monthColumns = keys.filter(isMonthColumn);
+
+  if (monthColumns.length && (!amountKey || monthColumns.length > 1)) {
+    return rows.flatMap((row, rowIndex) => {
+      return monthColumns
+        .map((monthColumn) => {
+          const amount = parseAmount(row[monthColumn]);
+          if (amount === 0) return null;
+
+          const monthInfo = monthInfoFromText(monthColumn);
+
+          return buildItem({
+            row,
+            rowIndex,
+            descKey,
+            categoryKey,
+            statusKey,
+            amount,
+            date: null,
+            monthInfo,
+          });
+        })
+        .filter(Boolean);
     });
   }
 
-  const dailyAmounts = parsed.reduce((map, item) => {
-    if (!item.date || isNaN(item.date)) return map;
-    const day = item.date.toISOString().slice(0, 10);
-    map[day] = (map[day] || 0) + item.amount;
-    return map;
-  }, {});
-  const sortedDates = Object.keys(dailyAmounts).sort();
-  const cumulativeValues = [];
-  sortedDates.reduce((sum, day) => {
-    const next = sum + dailyAmounts[day];
-    cumulativeValues.push(next);
-    return next;
-  }, 0);
+  return rows
+    .map((row, rowIndex) => {
+      const date = dateKey ? parseDate(row[dateKey]) : null;
+      const monthInfo = date ? monthInfoFromDate(date) : monthKey ? monthInfoFromText(row[monthKey]) : null;
 
-  const monthlyAmounts = parsed.reduce((map, item) => {
-    if (!item.date || isNaN(item.date)) return map;
-    const month = item.date.toLocaleString('pt-BR', { month: 'short', year: 'numeric' });
-    map[month] = (map[month] || 0) + item.amount;
-    return map;
-  }, {});
-  const monthLabels = Object.keys(monthlyAmounts).sort((a, b) => new Date(a) - new Date(b));
-  const monthValues = monthLabels.map(month => monthlyAmounts[month]);
+      return buildItem({
+        row,
+        rowIndex,
+        descKey,
+        categoryKey,
+        statusKey,
+        amount: amountKey ? parseAmount(row[amountKey]) : 0,
+        date,
+        monthInfo,
+      });
+    })
+    .filter(Boolean);
+}
 
-  safeDestroy(barChart);
-  safeDestroy(donutChart);
-  safeDestroy(lineChart);
-  safeDestroy(performanceChart);
-  safeDestroy(monthlyChart);
+function buildItem({ row, rowIndex, descKey, categoryKey, statusKey, amount, date, monthInfo }) {
+  const description = compact(descKey ? row[descKey] : "", `Registro ${rowIndex + 1}`);
+  const category = compact(categoryKey ? row[categoryKey] : "", "Sem categoria");
+  const status = buildStatus(statusKey ? row[statusKey] : "");
+  const resolvedMonth = monthInfo || monthInfoFromDate(date) || {
+    key: "sem-mes",
+    label: "Sem mes",
+    sort: 999999,
+  };
 
-  const barCtx = document.getElementById('barChart').getContext('2d');
-  barChart = new Chart(barCtx, {
-    type: 'bar',
+  if (!description && !category && !amount) return null;
+
+  return {
+    description,
+    category,
+    status,
+    amount,
+    date,
+    monthKey: resolvedMonth.key,
+    monthLabel: resolvedMonth.label,
+    monthSort: resolvedMonth.sort,
+    searchable: normalizeText(`${description} ${category} ${status} ${resolvedMonth.label}`),
+  };
+}
+
+function buildSourceUrls() {
+  const urls = [];
+  if (window.location.protocol !== "file:") {
+    urls.push(new URL("/api/sheet", window.location.origin).toString());
+  }
+  urls.push(DIRECT_CSV_URL);
+  return urls;
+}
+
+function withCacheBuster(url) {
+  const separator = url.includes("?") ? "&" : "?";
+  return `${url}${separator}t=${Date.now()}`;
+}
+
+async function loadCsvText() {
+  let lastError = null;
+
+  for (const url of buildSourceUrls()) {
+    try {
+      const response = await fetch(withCacheBuster(url), { cache: "no-store" });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+      const text = await response.text();
+      if (!text.trim() || text.trim().startsWith("<")) {
+        throw new Error("A resposta nao parece ser CSV.");
+      }
+      return text;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  throw lastError || new Error("Nao foi possivel carregar a planilha.");
+}
+
+function parseCsv(text) {
+  const result = Papa.parse(text, {
+    header: true,
+    skipEmptyLines: true,
+    transformHeader: (header) => header.trim(),
+  });
+
+  if (result.errors.length && !result.data.length) {
+    throw new Error(result.errors[0].message);
+  }
+
+  return result.data.filter((row) => Object.values(row).some((value) => String(value ?? "").trim()));
+}
+
+function setSelectOptions(select, options, allLabel) {
+  const currentValue = select.value;
+  select.innerHTML = "";
+
+  const allOption = document.createElement("option");
+  allOption.value = "";
+  allOption.textContent = allLabel;
+  select.appendChild(allOption);
+
+  options.forEach((option) => {
+    const element = document.createElement("option");
+    element.value = option.value;
+    element.textContent = option.label;
+    select.appendChild(element);
+  });
+
+  if (options.some((option) => option.value === currentValue)) {
+    select.value = currentValue;
+  }
+}
+
+function updateFilters(items) {
+  const months = Array.from(
+    new Map(items.map((item) => [item.monthKey, { value: item.monthKey, label: item.monthLabel, sort: item.monthSort }])).values()
+  ).sort((a, b) => a.sort - b.sort);
+
+  const statuses = Array.from(new Set(items.map((item) => item.status)))
+    .sort((a, b) => a.localeCompare(b, "pt-BR"))
+    .map((status) => ({ value: status, label: status }));
+
+  const categories = Array.from(new Set(items.map((item) => item.category)))
+    .sort((a, b) => a.localeCompare(b, "pt-BR"))
+    .map((category) => ({ value: category, label: category }));
+
+  setSelectOptions(getElement("monthFilter"), months, "Todos");
+  setSelectOptions(getElement("statusFilter"), statuses, "Todos");
+  setSelectOptions(getElement("categoryFilter"), categories, "Todas");
+}
+
+function getFilteredItems() {
+  const query = normalizeText(getElement("searchInput").value);
+  const month = getElement("monthFilter").value;
+  const status = getElement("statusFilter").value;
+  const category = getElement("categoryFilter").value;
+
+  return state.items.filter((item) => {
+    if (query && !item.searchable.includes(query)) return false;
+    if (month && item.monthKey !== month) return false;
+    if (status && item.status !== status) return false;
+    if (category && item.category !== category) return false;
+    return true;
+  });
+}
+
+function aggregateBy(items, keyBuilder) {
+  return Array.from(
+    items.reduce((map, item) => {
+      const key = keyBuilder(item);
+      const current = map.get(key.value) || { ...key, amount: 0, count: 0 };
+      current.amount += item.amount;
+      current.count += 1;
+      map.set(key.value, current);
+      return map;
+    }, new Map()).values()
+  );
+}
+
+function destroyChart(name) {
+  if (state.charts[name]) {
+    state.charts[name].destroy();
+    state.charts[name] = null;
+  }
+}
+
+function chartColors() {
+  return ["#145da0", "#d97a22", "#198754", "#7b5ea7", "#c43d32", "#6c757d", "#0f766e", "#b45309"];
+}
+
+function renderMonthlyChart(items) {
+  const grouped = aggregateBy(items, (item) => ({
+    value: item.monthKey,
+    label: item.monthLabel,
+    sort: item.monthSort,
+  })).sort((a, b) => a.sort - b.sort);
+
+  const labels = grouped.map((item) => item.label);
+  const amounts = grouped.map((item) => item.amount);
+  const cumulative = amounts.reduce((list, value, index) => {
+    list.push((list[index - 1] || 0) + value);
+    return list;
+  }, []);
+
+  const total = amounts.reduce((sum, value) => sum + value, 0);
+  getElement("monthlyStats").textContent = grouped.length
+    ? `${grouped.length} mes(es) exibidos, total de ${formatCurrency(total)}.`
+    : "Nenhum mes encontrado nos filtros atuais.";
+
+  destroyChart("monthly");
+  state.charts.monthly = new Chart(getElement("monthlyChart"), {
     data: {
-      labels: categoryLabels,
-      datasets: [{
-        label: 'Valor por categoria',
-        data: categoryValues,
-        backgroundColor: '#09375f',
-        borderRadius: 12,
-      }]
+      labels,
+      datasets: [
+        {
+          type: "bar",
+          label: "Total mensal",
+          data: amounts,
+          backgroundColor: "rgba(20, 93, 160, 0.82)",
+          borderRadius: 6,
+        },
+        {
+          type: "line",
+          label: "Acumulado",
+          data: cumulative,
+          borderColor: "#d97a22",
+          backgroundColor: "rgba(217, 122, 34, 0.12)",
+          tension: 0.28,
+          pointRadius: 4,
+          fill: false,
+        },
+      ],
     },
     options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { position: "bottom" },
+        tooltip: {
+          callbacks: {
+            label: (context) => `${context.dataset.label}: ${formatCurrency(context.parsed.y)}`,
+          },
+        },
+      },
+      scales: {
+        y: {
+          ticks: { callback: (value) => formatCurrency(value) },
+          grid: { color: "rgba(102, 117, 138, 0.18)" },
+        },
+        x: { grid: { display: false } },
+      },
+    },
+  });
+}
+
+function renderCategoryChart(items) {
+  const grouped = aggregateBy(items, (item) => ({ value: item.category, label: item.category, sort: 0 }))
+    .sort((a, b) => Math.abs(b.amount) - Math.abs(a.amount))
+    .slice(0, 10);
+
+  getElement("categoryStats").textContent = grouped.length
+    ? `Maior categoria: ${grouped[0].label} (${formatCurrency(grouped[0].amount)}).`
+    : "Nenhuma categoria nos filtros atuais.";
+
+  destroyChart("category");
+  state.charts.category = new Chart(getElement("categoryChart"), {
+    type: "bar",
+    data: {
+      labels: grouped.map((item) => item.label),
+      datasets: [
+        {
+          label: "Valor",
+          data: grouped.map((item) => item.amount),
+          backgroundColor: "#198754",
+          borderRadius: 6,
+        },
+      ],
+    },
+    options: {
+      indexAxis: "y",
       responsive: true,
       maintainAspectRatio: false,
       plugins: {
         legend: { display: false },
-        tooltip: { callbacks: { label: context => formatCurrency(context.parsed.y) } }
+        tooltip: { callbacks: { label: (context) => formatCurrency(context.parsed.x) } },
       },
       scales: {
-        x: { ticks: { color: '#44596f' } },
-        y: { ticks: { color: '#44596f', callback: value => formatCurrency(value) } }
-      }
-    }
-  });
-
-  const donutCtx = document.getElementById('donutChart').getContext('2d');
-  donutChart = new Chart(donutCtx, {
-    type: 'doughnut',
-    data: {
-      labels: statusLabels,
-      datasets: [{
-        data: statusValues,
-        backgroundColor: ['#09375f', '#f6a455'],
-        borderWidth: 0
-      }]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        legend: { position: 'bottom', labels: { color: '#44596f' } }
-      }
-    }
-  });
-
-  const monthlyCtx = document.getElementById('monthlyChart').getContext('2d');
-  monthlyChart = new Chart(monthlyCtx, {
-    type: 'line',
-    data: {
-      labels: monthLabels,
-      datasets: [{
-        label: 'Receita por mês',
-        data: monthValues,
-        borderColor: '#f6a455',
-        backgroundColor: 'rgba(246,164,85,0.18)',
-        fill: true,
-        tension: 0.25,
-        pointRadius: 4,
-        pointBackgroundColor: '#f6a455'
-      }]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        legend: { display: true, labels: { color: '#44596f' } },
-        tooltip: { callbacks: { label: context => formatCurrency(context.parsed.y) } }
+        x: {
+          ticks: { callback: (value) => formatCurrency(value) },
+          grid: { color: "rgba(102, 117, 138, 0.18)" },
+        },
+        y: { grid: { display: false } },
       },
-      scales: {
-        x: { ticks: { color: '#44596f' } },
-        y: { ticks: { color: '#44596f', callback: value => formatCurrency(value) } }
-      }
-    }
-  });
-
-  const performanceCtx = document.getElementById('performanceChart').getContext('2d');
-  const topCategoriesForPerf = sortedCategories.slice(0, 5).map(([name, value]) => ({
-    name,
-    value,
-    paidPercentage: parsed.filter(p => (p.category || p.desc) === name && p.status.includes('pago')).length / parsed.filter(p => (p.category || p.desc) === name).length * 100 || 0
-  }));
-  performanceChart = new Chart(performanceCtx, {
-    type: 'bar',
-    data: {
-      labels: topCategoriesForPerf.map(c => c.name),
-      datasets: [{
-        label: 'Taxa de recebimento (%)',
-        data: topCategoriesForPerf.map(c => c.paidPercentage),
-        backgroundColor: '#f6a455',
-        borderRadius: 12
-      }]
     },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      indexAxis: 'y',
-      plugins: {
-        legend: { display: true },
-        tooltip: { callbacks: { label: context => context.parsed.x.toFixed(1) + '%' } }
-      },
-      scales: {
-        x: { ticks: { color: '#44596f', callback: v => v + '%' }, max: 100 },
-        y: { ticks: { color: '#44596f' } }
-      }
-    }
-  });
-
-  const lineCtx = document.getElementById('lineChart').getContext('2d');
-  lineChart = new Chart(lineCtx, {
-    type: 'line',
-    data: {
-      labels: sortedDates,
-      datasets: [{
-        label: 'Tendência de caixa',
-        data: cumulativeValues,
-        borderColor: '#09375f',
-        backgroundColor: 'rgba(9,55,95,0.08)',
-        fill: true,
-        tension: 0.3,
-        pointRadius: 4,
-        pointBackgroundColor: '#09375f'
-      }]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        legend: { display: false }
-      },
-      scales: {
-        x: { ticks: { color: '#44596f' } },
-        y: { ticks: { color: '#44596f', callback: value => formatCurrency(value) } }
-      }
-    }
   });
 }
 
-const AUTO_REFRESH_SECONDS = 10;
-let autoRefreshTimer = null;
-let countdownTimer = null;
-let countdownRemaining = AUTO_REFRESH_SECONDS;
+function renderStatusChart(items) {
+  const grouped = aggregateBy(items, (item) => ({ value: item.status, label: item.status, sort: 0 })).sort((a, b) =>
+    a.label.localeCompare(b.label, "pt-BR")
+  );
 
-function setRefreshState(isRefreshing) {
-  const button = document.getElementById('refreshButton');
-  if (!button) return;
-  button.disabled = isRefreshing;
-  button.innerText = isRefreshing ? 'Atualizando...' : 'Atualizar dados';
+  const paid = grouped.find((item) => item.label === "Pago")?.count || 0;
+  const total = items.length || 1;
+  getElement("statusStats").textContent = `${paid} de ${items.length} registro(s) pagos (${((paid / total) * 100).toFixed(1)}%).`;
+
+  destroyChart("status");
+  state.charts.status = new Chart(getElement("statusChart"), {
+    type: "doughnut",
+    data: {
+      labels: grouped.map((item) => item.label),
+      datasets: [
+        {
+          data: grouped.map((item) => item.count),
+          backgroundColor: chartColors(),
+          borderWidth: 0,
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      cutout: "62%",
+      plugins: {
+        legend: { position: "bottom" },
+        tooltip: { callbacks: { label: (context) => `${context.label}: ${numberFormatter.format(context.parsed)}` } },
+      },
+    },
+  });
+}
+
+function renderTable(items) {
+  const tbody = document.querySelector("#dataTable tbody");
+  tbody.innerHTML = "";
+
+  const sorted = [...items].sort((a, b) => b.monthSort - a.monthSort).slice(0, 100);
+  getElement("tableStats").textContent = `${numberFormatter.format(items.length)} registro(s) filtrados.`;
+
+  if (!sorted.length) {
+    const row = document.createElement("tr");
+    row.innerHTML = '<td colspan="5" class="empty-cell">Nenhum registro encontrado.</td>';
+    tbody.appendChild(row);
+    return;
+  }
+
+  sorted.forEach((item) => {
+    const row = document.createElement("tr");
+    const statusClass = item.status === "Pago" ? "status-paid" : item.status === "Pendente" ? "status-pending" : "status-other";
+
+    row.innerHTML = `
+      <td>${escapeHtml(item.description)}</td>
+      <td>${escapeHtml(item.category)}</td>
+      <td>${escapeHtml(item.monthLabel)}</td>
+      <td><span class="status-pill ${statusClass}">${escapeHtml(item.status)}</span></td>
+      <td>${formatCurrency(item.amount)}</td>
+    `;
+    tbody.appendChild(row);
+  });
+}
+
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+function renderDashboard() {
+  const items = getFilteredItems();
+  const total = items.reduce((sum, item) => sum + item.amount, 0);
+  const average = items.length ? total / items.length : 0;
+  const currentMonthKey = monthInfoFromDate(new Date()).key;
+  const monthTotal = items.filter((item) => item.monthKey === currentMonthKey).reduce((sum, item) => sum + item.amount, 0);
+  const paidCount = items.filter((item) => item.status === "Pago").length;
+  const pendingCount = items.filter((item) => item.status !== "Pago").length;
+
+  getElement("cardCount").textContent = numberFormatter.format(items.length);
+  getElement("cardTotal").textContent = formatCurrency(total);
+  getElement("cardMonth").textContent = formatCurrency(monthTotal);
+  getElement("cardAverage").textContent = formatCurrency(average);
+  getElement("cardPaid").textContent = numberFormatter.format(paidCount);
+  getElement("cardPending").textContent = numberFormatter.format(pendingCount);
+
+  renderMonthlyChart(items);
+  renderCategoryChart(items);
+  renderStatusChart(items);
+  renderTable(items);
+}
+
+function setMessage(text, isError = false) {
+  const message = getElement("messageBox");
+  message.textContent = text;
+  message.classList.toggle("error", isError);
+}
+
+function setLoading(isLoading) {
+  const button = getElement("refreshButton");
+  button.disabled = isLoading;
+  button.querySelector("span").textContent = isLoading ? "Atualizando" : "Atualizar";
 }
 
 function setCountdownText(value) {
-  const countdown = document.getElementById('refreshCountdown');
-  if (countdown) {
-    countdown.innerText = `Próxima atualização em ${value}s`;
-  }
+  getElement("refreshCountdown").textContent = `Proxima atualizacao em ${value}s`;
 }
 
-function startRefreshCountdown() {
-  stopRefreshCountdown();
-  countdownRemaining = AUTO_REFRESH_SECONDS;
-  setCountdownText(countdownRemaining);
+function startCountdown() {
+  if (state.countdownTimer) clearInterval(state.countdownTimer);
+  state.countdownRemaining = AUTO_REFRESH_SECONDS;
+  setCountdownText(state.countdownRemaining);
 
-  countdownTimer = setInterval(() => {
-    countdownRemaining -= 1;
-    if (countdownRemaining <= 0) {
-      setCountdownText(0);
-      stopRefreshCountdown();
-      return;
+  state.countdownTimer = setInterval(() => {
+    state.countdownRemaining -= 1;
+    setCountdownText(Math.max(state.countdownRemaining, 0));
+    if (state.countdownRemaining <= 0) {
+      clearInterval(state.countdownTimer);
+      state.countdownTimer = null;
     }
-    setCountdownText(countdownRemaining);
   }, 1000);
 }
 
-function stopRefreshCountdown() {
-  if (countdownTimer) {
-    clearInterval(countdownTimer);
-    countdownTimer = null;
-  }
-}
+async function refreshData() {
+  try {
+    setLoading(true);
+    setMessage("Carregando planilha...");
 
-function updateDashboard() {
-  setRefreshState(true);
-  const cacheBustedUrl = `${sheetCsvUrl}&t=${Date.now()}`;
-  Papa.parse(cacheBustedUrl, {
-    download: true,
-    header: true,
-    skipEmptyLines: true,
-    complete: results => {
-      renderData(results.data);
-      setRefreshState(false);
-      startRefreshCountdown();
-    },
-    error: () => {
-      alert('Erro ao carregar a planilha. Verifique a URL e as permissões.');
-      setRefreshState(false);
+    const csvText = await loadCsvText();
+    const rows = parseCsv(csvText);
+    const items = normalizeRows(rows);
+
+    if (!items.length) {
+      throw new Error("A planilha carregou, mas nao encontrei registros validos.");
     }
-  });
+
+    state.items = items;
+    updateFilters(items);
+    renderDashboard();
+
+    getElement("lastUpdate").textContent = `Ultima atualizacao: ${new Date().toLocaleString("pt-BR")}`;
+    setMessage(`Planilha sincronizada com ${numberFormatter.format(items.length)} registro(s).`);
+    startCountdown();
+  } catch (error) {
+    setMessage(`Erro ao carregar a planilha: ${error.message}`, true);
+  } finally {
+    setLoading(false);
+  }
 }
 
 function startAutoRefresh() {
-  if (autoRefreshTimer) {
-    clearInterval(autoRefreshTimer);
-  }
-  autoRefreshTimer = setInterval(updateDashboard, AUTO_REFRESH_SECONDS * 1000);
+  if (state.autoRefreshTimer) clearInterval(state.autoRefreshTimer);
+  state.autoRefreshTimer = setInterval(refreshData, AUTO_REFRESH_SECONDS * 1000);
 }
 
-document.addEventListener('DOMContentLoaded', () => {
-  document.getElementById('refreshButton').addEventListener('click', updateDashboard);
-  updateDashboard();
-  startRefreshCountdown();
+function bindEvents() {
+  getElement("refreshButton").addEventListener("click", refreshData);
+  ["searchInput", "monthFilter", "statusFilter", "categoryFilter"].forEach((id) => {
+    getElement(id).addEventListener("input", renderDashboard);
+    getElement(id).addEventListener("change", renderDashboard);
+  });
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  if (window.Chart) {
+    Chart.defaults.font.family = 'Inter, "Segoe UI", Arial, sans-serif';
+    Chart.defaults.color = "#66758a";
+  }
+
+  bindEvents();
+  refreshData();
   startAutoRefresh();
+
+  if (window.lucide) {
+    window.lucide.createIcons();
+  }
 });

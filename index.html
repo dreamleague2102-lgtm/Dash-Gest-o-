@@ -2,120 +2,149 @@
 <html lang="pt-BR">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Dashboard Financeiro</title>
-  <link rel="stylesheet" href="styles.css">
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Dashboard de Gestao</title>
+  <link rel="stylesheet" href="styles.css" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
 </head>
 <body>
-  <header class="top">
-    <div class="top-left">
-      <span class="eyebrow">Painel Corporativo</span>
-      <h1>Gestão Financeira Inteligente</h1>
-      <p>Controle total dos seus fluxos de caixa em tempo real. Análise completa de receitas, despesas e tendências para decisões estratégicas.</p>
+  <header class="topbar">
+    <div>
+      <p class="eyebrow">Planilha Google Sheets</p>
+      <h1>Dashboard de Gestao</h1>
+      <p class="subtitle">Acompanhamento mensal com atualizacao automatica dos dados.</p>
     </div>
-    <div class="top-right">
-      <div class="top-status">
-        <span class="status-label">Auto-refresh</span>
-        <strong id="refreshCountdown">Próxima atualização em —</strong>
-        <span id="lastUpdate">Última atualização: —</span>
-      </div>
-      <button id="refreshButton" type="button">Atualizar agora</button>
+    <div class="refresh-box">
+      <span id="lastUpdate">Ultima atualizacao: --</span>
+      <strong id="refreshCountdown">Proxima atualizacao em --</strong>
+      <button id="refreshButton" type="button" class="button-primary">
+        <i data-lucide="refresh-cw" aria-hidden="true"></i>
+        <span>Atualizar</span>
+      </button>
     </div>
   </header>
 
-  <section class="overview">
-    <div class="kpi-grid">
-      <article class="kpi-card primary">
-        <span>Total de registros</span>
-        <strong id="card-count">—</strong>
-      </article>
-      <article class="kpi-card">
-        <span>Total do mês</span>
-        <strong id="card-month">—</strong>
-      </article>
-      <article class="kpi-card">
-        <span>Saldo acumulado</span>
-        <strong id="card-balance">—</strong>
-      </article>
-      <article class="kpi-card">
-        <span>Valor médio</span>
-        <strong id="card-average">—</strong>
-      </article>
-      <article class="kpi-card">
-        <span>Registros pagos</span>
-        <strong id="card-paid">—</strong>
-      </article>
-      <article class="kpi-card">
-        <span>Registros pendentes</span>
-        <strong id="card-pending">—</strong>
-      </article>
-    </div>
-    <div class="summary-grid">
-      <article class="summary-card">
-        <span>Top categoria</span>
-        <strong id="summaryTopCategory">—</strong>
-      </article>
-      <article class="summary-card">
-        <span>Média diária</span>
-        <strong id="summaryDailyAverage">—</strong>
-      </article>
-      <article class="summary-card">
-        <span>Total de categorias</span>
-        <strong id="summaryCategoryCount">—</strong>
-      </article>
-    </div>
-  </section>
+  <main class="page">
+    <section class="toolbar" aria-label="Filtros do dashboard">
+      <label>
+        <span>Buscar</span>
+        <input id="searchInput" type="search" placeholder="Cliente, descricao ou categoria" />
+      </label>
 
-  <main class="dashboard-grid">
-    <section class="panel panel-table">
-      <div class="panel-header"><h2>Contas pendentes</h2></div>
-      <div class="table-wrapper">
-        <table id="dataTable">
-          <thead><tr><th>Descrição</th><th>Status</th><th>Valor</th></tr></thead>
-          <tbody></tbody>
-        </table>
-      </div>
+      <label>
+        <span>Mes</span>
+        <select id="monthFilter">
+          <option value="">Todos</option>
+        </select>
+      </label>
+
+      <label>
+        <span>Status</span>
+        <select id="statusFilter">
+          <option value="">Todos</option>
+        </select>
+      </label>
+
+      <label>
+        <span>Categoria</span>
+        <select id="categoryFilter">
+          <option value="">Todas</option>
+        </select>
+      </label>
     </section>
 
-    <section class="panel panel-main">
-      <div class="panel-header">
-        <div>
-          <h2>Receita mensal</h2>
-          <p id="monthlyStats">Carregando receita por mês...</p>
+    <section class="kpi-grid" aria-label="Indicadores principais">
+      <article class="kpi-card">
+        <span>Registros</span>
+        <strong id="cardCount">--</strong>
+      </article>
+      <article class="kpi-card">
+        <span>Total filtrado</span>
+        <strong id="cardTotal">--</strong>
+      </article>
+      <article class="kpi-card">
+        <span>Total do mes</span>
+        <strong id="cardMonth">--</strong>
+      </article>
+      <article class="kpi-card">
+        <span>Valor medio</span>
+        <strong id="cardAverage">--</strong>
+      </article>
+      <article class="kpi-card">
+        <span>Pagos</span>
+        <strong id="cardPaid">--</strong>
+      </article>
+      <article class="kpi-card">
+        <span>Pendentes</span>
+        <strong id="cardPending">--</strong>
+      </article>
+    </section>
+
+    <section class="dashboard-grid">
+      <article class="panel panel-wide">
+        <div class="panel-header">
+          <div>
+            <h2>Visualizacao por mes</h2>
+            <p id="monthlyStats">Carregando dados mensais...</p>
+          </div>
         </div>
-      </div>
-      <div class="chart-wrapper"><canvas id="monthlyChart"></canvas></div>
-    </section>
-
-    <section class="panel panel-main">
-      <div class="panel-header">
-        <div>
-          <h2>Receita por categoria</h2>
-          <p id="categoryStats">Carregando métricas por categoria...</p>
+        <div class="chart-box chart-box-large">
+          <canvas id="monthlyChart"></canvas>
         </div>
-      </div>
-      <div class="chart-wrapper"><canvas id="barChart"></canvas></div>
+      </article>
+
+      <article class="panel">
+        <div class="panel-header">
+          <div>
+            <h2>Top categorias</h2>
+            <p id="categoryStats">Carregando categorias...</p>
+          </div>
+        </div>
+        <div class="chart-box">
+          <canvas id="categoryChart"></canvas>
+        </div>
+      </article>
+
+      <article class="panel">
+        <div class="panel-header">
+          <div>
+            <h2>Pago x pendente</h2>
+            <p id="statusStats">Carregando status...</p>
+          </div>
+        </div>
+        <div class="chart-box">
+          <canvas id="statusChart"></canvas>
+        </div>
+      </article>
+
+      <article class="panel panel-wide">
+        <div class="panel-header">
+          <div>
+            <h2>Detalhamento</h2>
+            <p id="tableStats">Carregando tabela...</p>
+          </div>
+        </div>
+        <div class="table-wrapper">
+          <table id="dataTable">
+            <thead>
+              <tr>
+                <th>Descricao</th>
+                <th>Categoria</th>
+                <th>Mes</th>
+                <th>Status</th>
+                <th>Valor</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </article>
     </section>
 
-    <section class="panel panel-side">
-      <div class="panel-header"><h2>Pago x Pendente</h2></div>
-      <div class="chart-wrapper compact"><canvas id="donutChart"></canvas></div>
-    </section>
-
-    <section class="panel panel-main">
-      <div class="panel-header"><h2>Desempenho de pagamentos</h2></div>
-      <div class="chart-wrapper"><canvas id="performanceChart"></canvas></div>
-    </section>
-
-    <section class="panel panel-main">
-      <div class="panel-header"><h2>Tendência de caixa</h2></div>
-      <div class="chart-wrapper"><canvas id="lineChart"></canvas></div>
-    </section>
+    <div id="messageBox" class="message" role="status" aria-live="polite"></div>
   </main>
-
-  <footer class="foot">Abra este arquivo pelo servidor local e atualize sua planilha para refletir os dados imediatamente.</footer>
 
   <script src="app.js"></script>
 </body>
