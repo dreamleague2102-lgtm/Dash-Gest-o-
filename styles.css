@@ -1,17 +1,21 @@
 :root {
-  --bg: #f5f7fb;
-  --surface: #ffffff;
-  --surface-soft: #f9fbfd;
-  --border: #dfe6ef;
-  --text: #17212f;
-  --muted: #66758a;
-  --primary: #145da0;
-  --primary-dark: #0f426f;
-  --accent: #d97a22;
-  --success: #198754;
-  --warning: #c47a00;
-  --danger: #c43d32;
-  --shadow: 0 12px 28px rgba(21, 35, 54, 0.08);
+  --bg: #090b10;
+  --surface: #12161d;
+  --surface-raised: #171c24;
+  --surface-soft: #1d2430;
+  --border: #2a3340;
+  --border-strong: #3a4656;
+  --text: #f2f6fb;
+  --muted: #95a3b8;
+  --muted-strong: #c2ccda;
+  --primary: #2dd4bf;
+  --primary-dark: #14a596;
+  --accent: #f6b44b;
+  --success: #4ade80;
+  --warning: #f59e0b;
+  --danger: #fb7185;
+  --violet: #a78bfa;
+  --shadow: 0 18px 42px rgba(0, 0, 0, 0.28);
 }
 
 * {
@@ -37,18 +41,19 @@ select {
   font: inherit;
 }
 
-canvas {
+canvas,
+svg {
   display: block;
   max-width: 100%;
 }
 
 .topbar {
   display: flex;
+  align-items: center;
   justify-content: space-between;
   gap: 24px;
-  align-items: center;
-  padding: 28px 32px;
-  background: var(--surface);
+  padding: 30px 34px;
+  background: #0d1016;
   border-bottom: 1px solid var(--border);
 }
 
@@ -56,7 +61,7 @@ canvas {
   margin: 0 0 6px;
   color: var(--primary);
   font-size: 0.78rem;
-  font-weight: 700;
+  font-weight: 800;
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
@@ -68,12 +73,14 @@ p {
 }
 
 h1 {
-  margin-bottom: 4px;
-  font-size: clamp(1.65rem, 3vw, 2.25rem);
+  margin-bottom: 6px;
+  color: var(--text);
+  font-size: clamp(1.7rem, 3vw, 2.35rem);
   line-height: 1.1;
 }
 
 .subtitle {
+  max-width: 680px;
   margin-bottom: 0;
   color: var(--muted);
 }
@@ -81,13 +88,17 @@ h1 {
 .refresh-box {
   display: grid;
   gap: 8px;
-  min-width: 250px;
+  min-width: 270px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
   color: var(--muted);
   font-size: 0.9rem;
 }
 
 .refresh-box strong {
-  color: var(--text);
+  color: var(--muted-strong);
 }
 
 .button-primary {
@@ -99,8 +110,8 @@ h1 {
   border: 0;
   border-radius: 8px;
   background: var(--primary);
-  color: #fff;
-  font-weight: 700;
+  color: #06100f;
+  font-weight: 800;
   cursor: pointer;
   transition: background 0.2s ease, transform 0.2s ease, opacity 0.2s ease;
 }
@@ -111,7 +122,7 @@ h1 {
 }
 
 .button-primary:hover:not(:disabled) {
-  background: var(--primary-dark);
+  background: #5eead4;
   transform: translateY(-1px);
 }
 
@@ -121,9 +132,9 @@ h1 {
 }
 
 .page {
-  width: min(1440px, 100%);
+  width: min(1460px, 100%);
   margin: 0 auto;
-  padding: 24px 32px 36px;
+  padding: 24px 32px 38px;
 }
 
 .toolbar {
@@ -136,18 +147,18 @@ h1 {
 
 .toolbar label {
   display: grid;
-  gap: 6px;
+  gap: 7px;
   color: var(--muted);
-  font-size: 0.82rem;
-  font-weight: 700;
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
 }
 
 .toolbar input,
 .toolbar select {
   width: 100%;
-  min-height: 42px;
+  min-height: 44px;
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--surface);
@@ -156,10 +167,142 @@ h1 {
   letter-spacing: 0;
 }
 
+.toolbar input::placeholder {
+  color: #6f7d90;
+}
+
 .toolbar input:focus,
 .toolbar select:focus {
-  outline: 3px solid rgba(20, 93, 160, 0.16);
+  outline: 3px solid rgba(45, 212, 191, 0.18);
   border-color: var(--primary);
+}
+
+.month-focus {
+  display: grid;
+  grid-template-columns: minmax(320px, 0.9fr) minmax(0, 1.4fr);
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.month-hero,
+.month-metrics,
+.kpi-card,
+.panel {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.month-hero {
+  min-height: 230px;
+  padding: 24px;
+  background: linear-gradient(135deg, #13201f 0%, #191923 54%, #241f13 100%);
+  border-color: #34433e;
+}
+
+.month-hero-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  align-items: flex-start;
+  margin-bottom: 22px;
+}
+
+.month-hero-header span,
+.month-metrics span,
+.kpi-card span {
+  display: block;
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.month-hero-header h2 {
+  margin: 5px 0 0;
+  color: var(--text);
+  font-size: clamp(1.25rem, 2vw, 1.65rem);
+}
+
+.month-hero-header svg {
+  width: 36px;
+  height: 36px;
+  color: var(--primary);
+}
+
+.month-hero strong {
+  display: block;
+  margin-bottom: 12px;
+  color: var(--text);
+  font-size: clamp(2rem, 4vw, 3.25rem);
+  line-height: 1;
+  overflow-wrap: anywhere;
+}
+
+.month-hero p {
+  margin-bottom: 0;
+  color: var(--muted-strong);
+  font-size: 0.98rem;
+}
+
+.month-hero p.positive {
+  color: var(--success);
+}
+
+.month-hero p.negative {
+  color: var(--danger);
+}
+
+.month-hero p.neutral {
+  color: var(--muted-strong);
+}
+
+.month-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1px;
+  overflow: hidden;
+  background: var(--border);
+}
+
+.month-metrics > div {
+  min-height: 112px;
+  padding: 20px;
+  background: var(--surface-raised);
+}
+
+.month-metrics strong {
+  display: block;
+  margin-top: 10px;
+  color: var(--text);
+  font-size: clamp(1.15rem, 1.7vw, 1.7rem);
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+
+.progress-wrap {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.progress-track {
+  width: 100%;
+  height: 12px;
+  margin-top: 14px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #283241;
+}
+
+.progress-fill {
+  width: 0;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--primary);
+  transition: width 0.35s ease;
 }
 
 .kpi-grid {
@@ -169,33 +312,20 @@ h1 {
   margin-bottom: 18px;
 }
 
-.kpi-card,
-.panel {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  box-shadow: var(--shadow);
-}
-
 .kpi-card {
   min-height: 112px;
   padding: 18px;
+  background: var(--surface-raised);
 }
 
 .kpi-card span {
-  display: block;
   margin-bottom: 10px;
-  color: var(--muted);
-  font-size: 0.76rem;
-  font-weight: 800;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
 }
 
 .kpi-card strong {
   display: block;
   color: var(--text);
-  font-size: clamp(1.35rem, 2vw, 1.85rem);
+  font-size: clamp(1.25rem, 2vw, 1.8rem);
   line-height: 1.1;
   overflow-wrap: anywhere;
 }
@@ -209,6 +339,7 @@ h1 {
 .panel {
   min-width: 0;
   padding: 20px;
+  background: var(--surface-raised);
 }
 
 .panel-wide {
@@ -224,8 +355,8 @@ h1 {
 
 .panel-header h2 {
   margin-bottom: 4px;
-  font-size: 1.08rem;
   color: var(--text);
+  font-size: 1.08rem;
 }
 
 .panel-header p {
@@ -237,11 +368,11 @@ h1 {
 .chart-box {
   position: relative;
   width: 100%;
-  min-height: 320px;
+  min-height: 330px;
 }
 
 .chart-box-large {
-  min-height: 390px;
+  min-height: 420px;
 }
 
 .table-wrapper {
@@ -266,7 +397,7 @@ h1 {
 
 #dataTable th {
   background: var(--surface-soft);
-  color: var(--muted);
+  color: var(--muted-strong);
   font-size: 0.76rem;
   font-weight: 800;
   letter-spacing: 0.06em;
@@ -285,7 +416,7 @@ h1 {
 }
 
 #dataTable tbody tr:hover {
-  background: #f7f9fc;
+  background: #202734;
 }
 
 .status-pill {
@@ -301,17 +432,17 @@ h1 {
 }
 
 .status-paid {
-  background: rgba(25, 135, 84, 0.12);
+  background: rgba(74, 222, 128, 0.14);
   color: var(--success);
 }
 
 .status-pending {
-  background: rgba(196, 61, 50, 0.12);
+  background: rgba(251, 113, 133, 0.14);
   color: var(--danger);
 }
 
 .status-other {
-  background: rgba(196, 122, 0, 0.13);
+  background: rgba(245, 158, 11, 0.15);
   color: var(--warning);
 }
 
@@ -327,12 +458,19 @@ h1 {
 }
 
 @media (max-width: 1180px) {
+  .month-focus,
+  .dashboard-grid {
+    grid-template-columns: 1fr;
+  }
+
   .kpi-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
+}
 
-  .dashboard-grid {
-    grid-template-columns: 1fr;
+@media (max-width: 920px) {
+  .month-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
@@ -341,6 +479,10 @@ h1 {
     align-items: stretch;
     flex-direction: column;
     padding: 22px 18px;
+  }
+
+  .refresh-box {
+    min-width: 0;
   }
 
   .page {
@@ -358,16 +500,19 @@ h1 {
 
 @media (max-width: 560px) {
   .toolbar,
+  .month-metrics,
   .kpi-grid {
     grid-template-columns: 1fr;
   }
 
+  .month-hero,
+  .month-metrics > div,
   .panel {
     padding: 16px;
   }
 
   .chart-box,
   .chart-box-large {
-    min-height: 280px;
+    min-height: 300px;
   }
 }

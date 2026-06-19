@@ -377,7 +377,7 @@ function updateFilters(items) {
   setSelectOptions(getElement("categoryFilter"), categories, "Todas");
 }
 
-function getFilteredItems() {
+function getFilteredItems(options = {}) {
   const query = normalizeText(getElement("searchInput").value);
   const month = getElement("monthFilter").value;
   const status = getElement("statusFilter").value;
@@ -385,7 +385,7 @@ function getFilteredItems() {
 
   return state.items.filter((item) => {
     if (query && !item.searchable.includes(query)) return false;
-    if (month && item.monthKey !== month) return false;
+    if (!options.ignoreMonth && month && item.monthKey !== month) return false;
     if (status && item.status !== status) return false;
     if (category && item.category !== category) return false;
     return true;
@@ -413,10 +413,60 @@ function destroyChart(name) {
 }
 
 function chartColors() {
-  return ["#145da0", "#d97a22", "#198754", "#7b5ea7", "#c43d32", "#6c757d", "#0f766e", "#b45309"];
+  return ["#2dd4bf", "#f6b44b", "#4ade80", "#a78bfa", "#fb7185", "#60a5fa", "#f472b6", "#c2ccda"];
+}
+
+function fullMonthLabel(date) {
+  return date.toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
+}
+
+function formatSignedCurrency(value) {
+  const sign = value > 0 ? "+" : value < 0 ? "-" : "";
+  return `${sign}${formatCurrency(Math.abs(value))}`;
+}
+
+function monthInfoFromOffset(offset) {
+  const now = new Date();
+  return monthInfoFromDate(new Date(now.getFullYear(), now.getMonth() + offset, 1));
+}
+
+function statusTrendClass(value) {
+  if (value > 0) return "positive";
+  if (value < 0) return "negative";
+  return "neutral";
+}
+
+function setTrendText(element, currentTotal, previousTotal) {
+  const delta = currentTotal - previousTotal;
+  const pct = previousTotal ? (delta / Math.abs(previousTotal)) * 100 : currentTotal ? 100 : 0;
+  element.className = statusTrendClass(delta);
+  element.textContent = `${formatSignedCurrency(delta)} vs mes anterior (${pct.toFixed(1)}%)`;
+}
+
+function updateCurrentMonthInsight(items) {
+  const currentInfo = monthInfoFromOffset(0);
+  const previousInfo = monthInfoFromOffset(-1);
+  const currentItems = items.filter((item) => item.monthKey === currentInfo.key);
+  const previousItems = items.filter((item) => item.monthKey === previousInfo.key);
+  const currentTotal = currentItems.reduce((sum, item) => sum + item.amount, 0);
+  const previousTotal = previousItems.reduce((sum, item) => sum + item.amount, 0);
+  const paidItems = currentItems.filter((item) => item.status === "Pago");
+  const pendingItems = currentItems.filter((item) => item.status !== "Pago");
+  const paidPercentage = currentItems.length ? (paidItems.length / currentItems.length) * 100 : 0;
+  const topCategory = aggregateBy(currentItems, (item) => ({ value: item.category, label: item.category, sort: 0 }))
+    .sort((a, b) => Math.abs(b.amount) - Math.abs(a.amount))[0];
+
+  getElement("currentMonthLabel").textContent = fullMonthLabel(new Date());
+  getElement("currentMonthTotal").textContent = formatCurrency(currentTotal);
+  setTrendText(getElement("currentMonthDelta"), currentTotal, previousTotal);
+  getElement("currentMonthPaid").textContent = numberFormatter.format(paidItems.length);
+  getElement("currentMonthPending").textContent = numberFormatter.format(pendingItems.length);
+  getElement("currentMonthTop").textContent = topCategory ? `${topCategory.label} (${formatCurrency(topCategory.amount)})` : "Sem dados";
+  getElement("currentMonthProgress").style.width = `${Math.min(100, Math.max(0, paidPercentage)).toFixed(1)}%`;
 }
 
 function renderMonthlyChart(items) {
+  const currentMonthKey = monthInfoFromOffset(0).key;
   const grouped = aggregateBy(items, (item) => ({
     value: item.monthKey,
     label: item.monthLabel,
@@ -425,14 +475,17 @@ function renderMonthlyChart(items) {
 
   const labels = grouped.map((item) => item.label);
   const amounts = grouped.map((item) => item.amount);
+  const average = amounts.length ? amounts.reduce((sum, value) => sum + value, 0) / amounts.length : 0;
   const cumulative = amounts.reduce((list, value, index) => {
     list.push((list[index - 1] || 0) + value);
     return list;
   }, []);
+  const averageLine = grouped.map(() => average);
 
   const total = amounts.reduce((sum, value) => sum + value, 0);
+  const biggest = grouped.slice().sort((a, b) => Math.abs(b.amount) - Math.abs(a.amount))[0];
   getElement("monthlyStats").textContent = grouped.length
-    ? `${grouped.length} mes(es) exibidos, total de ${formatCurrency(total)}.`
+    ? `${grouped.length} mes(es), total ${formatCurrency(total)}. Maior mes: ${biggest.label} (${formatCurrency(biggest.amount)}).`
     : "Nenhum mes encontrado nos filtros atuais.";
 
   destroyChart("monthly");
@@ -444,17 +497,30 @@ function renderMonthlyChart(items) {
           type: "bar",
           label: "Total mensal",
           data: amounts,
-          backgroundColor: "rgba(20, 93, 160, 0.82)",
+          backgroundColor: grouped.map((item) => (item.value === currentMonthKey ? "rgba(246, 180, 75, 0.95)" : "rgba(45, 212, 191, 0.74)")),
+          borderColor: grouped.map((item) => (item.value === currentMonthKey ? "#f6b44b" : "#2dd4bf")),
+          borderWidth: 1,
           borderRadius: 6,
         },
         {
           type: "line",
           label: "Acumulado",
           data: cumulative,
-          borderColor: "#d97a22",
-          backgroundColor: "rgba(217, 122, 34, 0.12)",
+          borderColor: "#a78bfa",
+          backgroundColor: "rgba(167, 139, 250, 0.14)",
           tension: 0.28,
           pointRadius: 4,
+          pointBackgroundColor: "#a78bfa",
+          fill: false,
+        },
+        {
+          type: "line",
+          label: "Media mensal",
+          data: averageLine,
+          borderColor: "#95a3b8",
+          borderDash: [6, 6],
+          borderWidth: 1.5,
+          pointRadius: 0,
           fill: false,
         },
       ],
@@ -463,7 +529,15 @@ function renderMonthlyChart(items) {
       responsive: true,
       maintainAspectRatio: false,
       plugins: {
-        legend: { position: "bottom" },
+        legend: {
+          position: "bottom",
+          labels: {
+            color: "#c2ccda",
+            usePointStyle: true,
+            boxWidth: 8,
+            boxHeight: 8,
+          },
+        },
         tooltip: {
           callbacks: {
             label: (context) => `${context.dataset.label}: ${formatCurrency(context.parsed.y)}`,
@@ -472,10 +546,13 @@ function renderMonthlyChart(items) {
       },
       scales: {
         y: {
-          ticks: { callback: (value) => formatCurrency(value) },
-          grid: { color: "rgba(102, 117, 138, 0.18)" },
+          ticks: { color: "#95a3b8", callback: (value) => formatCurrency(value) },
+          grid: { color: "rgba(149, 163, 184, 0.16)" },
         },
-        x: { grid: { display: false } },
+        x: {
+          ticks: { color: "#c2ccda" },
+          grid: { display: false },
+        },
       },
     },
   });
@@ -499,7 +576,9 @@ function renderCategoryChart(items) {
         {
           label: "Valor",
           data: grouped.map((item) => item.amount),
-          backgroundColor: "#198754",
+          backgroundColor: "rgba(74, 222, 128, 0.82)",
+          borderColor: "#4ade80",
+          borderWidth: 1,
           borderRadius: 6,
         },
       ],
@@ -514,10 +593,13 @@ function renderCategoryChart(items) {
       },
       scales: {
         x: {
-          ticks: { callback: (value) => formatCurrency(value) },
-          grid: { color: "rgba(102, 117, 138, 0.18)" },
+          ticks: { color: "#95a3b8", callback: (value) => formatCurrency(value) },
+          grid: { color: "rgba(149, 163, 184, 0.16)" },
         },
-        y: { grid: { display: false } },
+        y: {
+          ticks: { color: "#c2ccda" },
+          grid: { display: false },
+        },
       },
     },
   });
@@ -541,7 +623,8 @@ function renderStatusChart(items) {
         {
           data: grouped.map((item) => item.count),
           backgroundColor: chartColors(),
-          borderWidth: 0,
+          borderColor: "#171c24",
+          borderWidth: 3,
         },
       ],
     },
@@ -550,7 +633,15 @@ function renderStatusChart(items) {
       maintainAspectRatio: false,
       cutout: "62%",
       plugins: {
-        legend: { position: "bottom" },
+        legend: {
+          position: "bottom",
+          labels: {
+            color: "#c2ccda",
+            usePointStyle: true,
+            boxWidth: 8,
+            boxHeight: 8,
+          },
+        },
         tooltip: { callbacks: { label: (context) => `${context.label}: ${numberFormatter.format(context.parsed)}` } },
       },
     },
@@ -597,6 +688,7 @@ function escapeHtml(value) {
 
 function renderDashboard() {
   const items = getFilteredItems();
+  const currentMonthBaseItems = getFilteredItems({ ignoreMonth: true });
   const total = items.reduce((sum, item) => sum + item.amount, 0);
   const average = items.length ? total / items.length : 0;
   const currentMonthKey = monthInfoFromDate(new Date()).key;
@@ -611,6 +703,7 @@ function renderDashboard() {
   getElement("cardPaid").textContent = numberFormatter.format(paidCount);
   getElement("cardPending").textContent = numberFormatter.format(pendingCount);
 
+  updateCurrentMonthInsight(currentMonthBaseItems);
   renderMonthlyChart(items);
   renderCategoryChart(items);
   renderStatusChart(items);
@@ -691,7 +784,8 @@ function bindEvents() {
 document.addEventListener("DOMContentLoaded", () => {
   if (window.Chart) {
     Chart.defaults.font.family = 'Inter, "Segoe UI", Arial, sans-serif';
-    Chart.defaults.color = "#66758a";
+    Chart.defaults.color = "#c2ccda";
+    Chart.defaults.borderColor = "rgba(149, 163, 184, 0.16)";
   }
 
   bindEvents();

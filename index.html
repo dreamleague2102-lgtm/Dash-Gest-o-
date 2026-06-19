@@ -14,7 +14,7 @@
     <div>
       <p class="eyebrow">Planilha Google Sheets</p>
       <h1>Dashboard de Gestao</h1>
-      <p class="subtitle">Acompanhamento mensal com atualizacao automatica dos dados.</p>
+      <p class="subtitle">Leitura executiva dos pagamentos, pendencias e evolucao mensal.</p>
     </div>
     <div class="refresh-box">
       <span id="lastUpdate">Ultima atualizacao: --</span>
@@ -55,6 +55,41 @@
       </label>
     </section>
 
+    <section class="month-focus" aria-label="Destaque do mes atual">
+      <article class="month-hero">
+        <div class="month-hero-header">
+          <div>
+            <span>Mes atual</span>
+            <h2 id="currentMonthLabel">--</h2>
+          </div>
+          <i data-lucide="calendar-days" aria-hidden="true"></i>
+        </div>
+        <strong id="currentMonthTotal">--</strong>
+        <p id="currentMonthDelta">Comparando com o mes anterior...</p>
+      </article>
+
+      <article class="month-metrics">
+        <div>
+          <span>Pagos no mes</span>
+          <strong id="currentMonthPaid">--</strong>
+        </div>
+        <div>
+          <span>Pendentes no mes</span>
+          <strong id="currentMonthPending">--</strong>
+        </div>
+        <div>
+          <span>Principal categoria</span>
+          <strong id="currentMonthTop">--</strong>
+        </div>
+        <div class="progress-wrap">
+          <span>Conclusao do mes</span>
+          <div class="progress-track" aria-hidden="true">
+            <div id="currentMonthProgress" class="progress-fill"></div>
+          </div>
+        </div>
+      </article>
+    </section>
+
     <section class="kpi-grid" aria-label="Indicadores principais">
       <article class="kpi-card">
         <span>Registros</span>
@@ -86,7 +121,7 @@
       <article class="panel panel-wide">
         <div class="panel-header">
           <div>
-            <h2>Visualizacao por mes</h2>
+            <h2>Visao mensal</h2>
             <p id="monthlyStats">Carregando dados mensais...</p>
           </div>
         </div>
