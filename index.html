@@ -3,175 +3,163 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Dashboard de Gestao</title>
+  <title>Painel Financeiro</title>
   <link rel="stylesheet" href="styles.css" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
   <script src="https://unpkg.com/lucide@latest"></script>
 </head>
 <body>
-  <header class="topbar">
-    <div>
-      <p class="eyebrow">Planilha Google Sheets</p>
-      <h1>Dashboard de Gestao</h1>
-      <p class="subtitle">Receitas, despesas, lucro e saldo calculados direto da planilha.</p>
-    </div>
-    <div class="refresh-box">
-      <span id="lastUpdate">Ultima atualizacao: --</span>
-      <strong id="refreshCountdown">Proxima atualizacao em --</strong>
-      <button id="refreshButton" type="button" class="button-primary">
-        <i data-lucide="refresh-cw" aria-hidden="true"></i>
-        <span>Atualizar</span>
-      </button>
-    </div>
-  </header>
+  <div class="app-shell">
+    <header class="app-header">
+      <a class="brand" href="./" aria-label="Painel Financeiro">
+        <span class="brand-mark">B</span>
+        <span>
+          <strong>Painel Financeiro</strong>
+          <small>Visao consolidada · Exercicio <span id="currentYear">2026</span></small>
+        </span>
+      </a>
 
-  <main class="page">
-    <section class="toolbar" aria-label="Filtros do dashboard">
-      <label>
-        <span>Buscar</span>
-        <input id="searchInput" type="search" placeholder="Cliente, descricao ou categoria" />
-      </label>
+      <nav class="nav-tabs" aria-label="Navegacao principal">
+        <button type="button" class="active">Visao Geral</button>
+        <button type="button">Fluxo de Caixa</button>
+        <button type="button">DRE</button>
+        <button type="button">Contas</button>
+        <button type="button">Relatorios</button>
+      </nav>
 
-      <label>
-        <span>Mes</span>
-        <select id="monthFilter">
-          <option value="">Todos</option>
+      <div class="header-actions">
+        <select id="periodFilter" aria-label="Periodo do dashboard">
+          <option value="last12">Ultimos 12 meses</option>
+          <option value="currentYear">Ano atual</option>
+          <option value="all">Todos os dados</option>
         </select>
-      </label>
+        <button id="exportButton" class="export-button" type="button">Exportar</button>
+        <button id="refreshButton" class="icon-button" type="button" aria-label="Atualizar dados">
+          <i data-lucide="refresh-cw" aria-hidden="true"></i>
+        </button>
+      </div>
+    </header>
 
-      <label>
-        <span>Status</span>
-        <select id="statusFilter">
-          <option value="">Todos</option>
-        </select>
-      </label>
-
-      <label>
-        <span>Categoria</span>
-        <select id="categoryFilter">
-          <option value="">Todas</option>
-        </select>
-      </label>
-    </section>
-
-    <section class="month-focus" aria-label="Destaque do mes atual">
-      <article class="month-hero">
-        <div class="month-hero-header">
-          <div>
-            <span>Mes atual</span>
-            <h2 id="currentMonthLabel">--</h2>
+    <main class="page">
+      <section class="summary-grid" aria-label="Resumo financeiro">
+        <article class="metric-card">
+          <div class="metric-top">
+            <span>Receita Total</span>
+            <strong id="cardRevenueChange" class="trend-pill">--</strong>
           </div>
-          <i data-lucide="calendar-days" aria-hidden="true"></i>
-        </div>
-        <strong id="currentMonthTotal">--</strong>
-        <p id="currentMonthDelta">Comparando com o mes anterior...</p>
-      </article>
+          <strong id="cardTotal" class="metric-value">--</strong>
+          <p>vs periodo anterior</p>
+        </article>
 
-      <article class="month-metrics">
-        <div>
-          <span>Receita no mes</span>
-          <strong id="currentMonthPaid">--</strong>
-        </div>
-        <div>
-          <span>Despesa no mes</span>
-          <strong id="currentMonthPending">--</strong>
-        </div>
-        <div>
-          <span>Margem do mes</span>
-          <strong id="currentMonthTop">--</strong>
-        </div>
-        <div class="progress-wrap">
-          <span>Receita x despesa</span>
-          <div class="progress-track" aria-hidden="true">
-            <div id="currentMonthProgress" class="progress-fill"></div>
+        <article class="metric-card">
+          <div class="metric-top">
+            <span>Despesa Total</span>
+            <strong id="cardExpenseChange" class="trend-pill">--</strong>
           </div>
-        </div>
-      </article>
-    </section>
+          <strong id="cardMonth" class="metric-value">--</strong>
+          <p>vs periodo anterior</p>
+        </article>
 
-    <section class="kpi-grid" aria-label="Indicadores principais">
-      <article class="kpi-card">
-        <span>Transacoes</span>
-        <strong id="cardCount">--</strong>
-      </article>
-      <article class="kpi-card">
-        <span>Receita</span>
-        <strong id="cardTotal">--</strong>
-      </article>
-      <article class="kpi-card">
-        <span>Despesa</span>
-        <strong id="cardMonth">--</strong>
-      </article>
-      <article class="kpi-card">
-        <span>Lucro</span>
-        <strong id="cardAverage">--</strong>
-      </article>
-      <article class="kpi-card">
-        <span>Margem</span>
-        <strong id="cardPaid">--</strong>
-      </article>
-      <article class="kpi-card">
-        <span>Pendentes</span>
-        <strong id="cardPending">--</strong>
-      </article>
-    </section>
+        <article class="metric-card">
+          <div class="metric-top">
+            <span>Lucro Liquido</span>
+            <strong id="cardProfitChange" class="trend-pill">--</strong>
+          </div>
+          <strong id="cardAverage" class="metric-value">--</strong>
+          <p id="profitMarginText">margem --</p>
+        </article>
 
-    <section class="dashboard-grid">
-      <article class="panel panel-wide">
+        <article class="metric-card">
+          <div class="metric-top">
+            <span>Saldo em Caixa</span>
+            <strong id="cardBalanceChange" class="trend-pill">--</strong>
+          </div>
+          <strong id="cardBalance" class="metric-value">--</strong>
+          <p id="activeAccountsText">-- contas ativas</p>
+        </article>
+      </section>
+
+      <section class="panel panel-wide">
         <div class="panel-header">
           <div>
-            <h2>Visao mensal</h2>
-            <p id="monthlyStats">Carregando receitas, despesas e lucro por mes...</p>
+            <h2>Receita vs Despesa</h2>
+            <p id="monthlyStats">Comparativo mensal</p>
+          </div>
+          <div class="chart-legend">
+            <span><i class="dot income"></i>Receita</span>
+            <span><i class="dot expense"></i>Despesa</span>
           </div>
         </div>
-        <div class="chart-box chart-box-large">
+        <div class="chart-box chart-box-main">
           <canvas id="monthlyChart"></canvas>
         </div>
-      </article>
+      </section>
 
-      <article class="panel">
+      <section class="panel panel-wide status-panel">
         <div class="panel-header">
           <div>
-            <h2>Despesas por categoria</h2>
-            <p id="categoryStats">Carregando categorias...</p>
+            <h2>Contas Pagas vs Pendentes</h2>
+            <p>Quantidade por status</p>
           </div>
         </div>
-        <div class="chart-box">
-          <canvas id="categoryChart"></canvas>
-        </div>
-      </article>
-
-      <article class="panel">
-        <div class="panel-header">
-          <div>
-            <h2>Receita por fonte</h2>
-            <p id="sourceStats">Carregando fontes...</p>
+        <div class="status-layout">
+          <div class="donut-wrap">
+            <canvas id="statusChart"></canvas>
+          </div>
+          <div class="status-list">
+            <div><span><i class="dot income"></i>Pagas</span><strong id="statusPaidCount">--</strong></div>
+            <div><span><i class="dot warning"></i>Pendentes</span><strong id="statusPendingCount">--</strong></div>
+            <div><span><i class="dot expense"></i>Atrasadas</span><strong id="statusLateCount">--</strong></div>
           </div>
         </div>
-        <div class="chart-box">
-          <canvas id="sourceChart"></canvas>
-        </div>
-      </article>
+      </section>
 
-      <article class="panel">
+      <section class="panel panel-wide">
         <div class="panel-header">
           <div>
-            <h2>Status das contas</h2>
-            <p id="statusStats">Carregando status...</p>
+            <h2>Desempenho do Mes</h2>
+            <p id="dailyStats">Evolucao diaria</p>
+          </div>
+          <div class="panel-tools">
+            <div class="chart-legend">
+              <span><i class="dot income"></i>Receita</span>
+              <span><i class="dot expense"></i>Despesa</span>
+              <span><i class="dot profit"></i>Lucro</span>
+            </div>
+            <select id="dailyMonthFilter" aria-label="Mes do desempenho diario">
+              <option value="">Mes atual</option>
+            </select>
           </div>
         </div>
-        <div class="chart-box">
-          <canvas id="statusChart"></canvas>
-        </div>
-      </article>
 
-      <article class="panel panel-wide">
+        <div class="daily-kpis">
+          <article>
+            <span>Receita</span>
+            <strong id="dailyRevenue">--</strong>
+          </article>
+          <article>
+            <span>Despesa</span>
+            <strong id="dailyExpense">--</strong>
+          </article>
+          <article>
+            <span>Lucro</span>
+            <strong id="dailyProfit">--</strong>
+          </article>
+        </div>
+
+        <div class="chart-box chart-box-main">
+          <canvas id="dailyChart"></canvas>
+        </div>
+      </section>
+
+      <section class="panel panel-wide">
         <div class="panel-header">
           <div>
-            <h2>Detalhamento</h2>
+            <h2>Transacoes</h2>
             <p id="tableStats">Carregando tabela...</p>
           </div>
+          <span id="lastUpdate" class="sync-text">Ultima atualizacao: --</span>
         </div>
         <div class="table-wrapper">
           <table id="dataTable">
@@ -188,11 +176,14 @@
             <tbody></tbody>
           </table>
         </div>
-      </article>
-    </section>
+      </section>
 
-    <div id="messageBox" class="message" role="status" aria-live="polite"></div>
-  </main>
+      <div class="footer-status">
+        <span id="refreshCountdown">Proxima atualizacao em --</span>
+        <span id="messageBox" role="status" aria-live="polite"></span>
+      </div>
+    </main>
+  </div>
 
   <script src="app.js"></script>
 </body>
