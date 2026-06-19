@@ -12,8 +12,8 @@
   <header class="top">
     <div class="top-left">
       <span class="eyebrow">Painel Corporativo</span>
-      <h1>Dashboard Financeiro</h1>
-      <p>Visualize a evolução dos seus valores em tempo real a partir da planilha, com indicadores claros e informações prontas para decisão.</p>
+      <h1>Gestão Financeira Inteligente</h1>
+      <p>Controle total dos seus fluxos de caixa em tempo real. Análise completa de receitas, despesas e tendências para decisões estratégicas.</p>
     </div>
     <div class="top-right">
       <div class="top-status">
@@ -69,6 +69,16 @@
   </section>
 
   <main class="dashboard-grid">
+    <section class="panel panel-table">
+      <div class="panel-header"><h2>Contas pendentes</h2></div>
+      <div class="table-wrapper">
+        <table id="dataTable">
+          <thead><tr><th>Descrição</th><th>Status</th><th>Valor</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+
     <section class="panel panel-main">
       <div class="panel-header">
         <div>
@@ -84,14 +94,9 @@
       <div class="chart-wrapper compact"><canvas id="donutChart"></canvas></div>
     </section>
 
-    <section class="panel panel-table">
-      <div class="panel-header"><h2>Contas pendentes</h2></div>
-      <div class="table-wrapper">
-        <table id="dataTable">
-          <thead><tr><th>Descrição</th><th>Status</th><th>Valor</th></tr></thead>
-          <tbody></tbody>
-        </table>
-      </div>
+    <section class="panel panel-main">
+      <div class="panel-header"><h2>Desempenho mensal</h2></div>
+      <div class="chart-wrapper"><canvas id="performanceChart"></canvas></div>
     </section>
 
     <section class="panel panel-main">

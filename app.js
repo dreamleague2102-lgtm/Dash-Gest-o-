@@ -3,6 +3,7 @@ const sheetCsvUrl = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vStSGzixWpI
 let barChart = null;
 let donutChart = null;
 let lineChart = null;
+let performanceChart = null;
 
 function normalizeKey(k) {
   return (k || '').toString().trim().toLowerCase();
@@ -143,6 +144,7 @@ function renderData(rows) {
   safeDestroy(barChart);
   safeDestroy(donutChart);
   safeDestroy(lineChart);
+  safeDestroy(performanceChart);
 
   const barCtx = document.getElementById('barChart').getContext('2d');
   barChart = new Chart(barCtx, {
@@ -186,6 +188,38 @@ function renderData(rows) {
       maintainAspectRatio: false,
       plugins: {
         legend: { position: 'bottom', labels: { color: '#44596f' } }
+      }
+    }
+  });
+
+  const performanceCtx = document.getElementById('performanceChart').getContext('2d');
+  const topCategoriesForPerf = sortedCategories.slice(0, 5).map(([name, value]) => ({
+    name,
+    value,
+    paidPercentage: parsed.filter(p => (p.category || p.desc) === name && p.status.includes('pago')).length / parsed.filter(p => (p.category || p.desc) === name).length * 100 || 0
+  }));
+  performanceChart = new Chart(performanceCtx, {
+    type: 'bar',
+    data: {
+      labels: topCategoriesForPerf.map(c => c.name),
+      datasets: [{
+        label: 'Taxa de recebimento (%)',
+        data: topCategoriesForPerf.map(c => c.paidPercentage),
+        backgroundColor: '#f6a455',
+        borderRadius: 12
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      indexAxis: 'y',
+      plugins: {
+        legend: { display: true },
+        tooltip: { callbacks: { label: context => context.parsed.x.toFixed(1) + '%' } }
+      },
+      scales: {
+        x: { ticks: { color: '#44596f', callback: v => v + '%' }, max: 100 },
+        y: { ticks: { color: '#44596f' } }
       }
     }
   });

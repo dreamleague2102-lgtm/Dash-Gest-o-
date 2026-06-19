@@ -21,9 +21,9 @@ html,
 body {
   margin: 0;
   min-height: 100%;
-  background: radial-gradient(circle at top left, rgba(246,164,85,0.12), transparent 20%),
-              radial-gradient(circle at bottom right, rgba(9,55,95,0.08), transparent 18%),
-              linear-gradient(180deg, var(--background) 0%, #e8eef7 55%, #f9fbfd 100%);
+  background: radial-gradient(circle at top left, rgba(246,164,85,0.08), transparent 25%),
+              radial-gradient(circle at bottom right, rgba(9,55,95,0.12), transparent 20%),
+              linear-gradient(180deg, #1a2332 0%, #0f1419 50%, #1a1f2e 100%);
   color: var(--text);
 }
 
