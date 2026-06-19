@@ -21,18 +21,16 @@
       </a>
 
       <nav class="nav-tabs" aria-label="Navegacao principal">
-        <button type="button" class="active">Visao Geral</button>
-        <button type="button">Fluxo de Caixa</button>
-        <button type="button">DRE</button>
-        <button type="button">Contas</button>
-        <button type="button">Relatorios</button>
+        <button type="button" class="active" data-target="overview">Visao Geral</button>
+        <button type="button" data-target="cashflow">Fluxo de Caixa</button>
+        <button type="button" data-target="performance">DRE</button>
+        <button type="button" data-target="accounts">Contas</button>
+        <button type="button" data-target="reports">Relatorios</button>
       </nav>
 
       <div class="header-actions">
         <select id="periodFilter" aria-label="Periodo do dashboard">
-          <option value="last12">Ultimos 12 meses</option>
-          <option value="currentYear">Ano atual</option>
-          <option value="all">Todos os dados</option>
+          <option value="all">Todos os meses</option>
         </select>
         <button id="exportButton" class="export-button" type="button">Exportar</button>
         <button id="refreshButton" class="icon-button" type="button" aria-label="Atualizar dados">
@@ -42,7 +40,7 @@
     </header>
 
     <main class="page">
-      <section class="summary-grid" aria-label="Resumo financeiro">
+      <section id="overview" class="summary-grid" aria-label="Resumo financeiro">
         <article class="metric-card">
           <div class="metric-top">
             <span id="cardTotalLabel">Receita Total</span>
@@ -80,7 +78,7 @@
         </article>
       </section>
 
-      <section class="panel panel-wide">
+      <section id="cashflow" class="panel panel-wide">
         <div class="panel-header">
           <div>
             <h2 id="monthlyTitle">Receita vs Despesa</h2>
@@ -96,7 +94,7 @@
         </div>
       </section>
 
-      <section class="panel panel-wide status-panel">
+      <section id="accounts" class="panel panel-wide status-panel">
         <div class="panel-header">
           <div>
             <h2>Contas Pagas vs Pendentes</h2>
@@ -115,7 +113,7 @@
         </div>
       </section>
 
-      <section class="panel panel-wide">
+      <section id="performance" class="panel panel-wide">
         <div class="panel-header">
           <div>
             <h2>Desempenho do Mes</h2>
@@ -127,9 +125,6 @@
               <span><i class="dot expense"></i><span id="dailyLegendB">Despesa</span></span>
               <span><i class="dot profit"></i><span id="dailyLegendC">Lucro</span></span>
             </div>
-            <select id="dailyMonthFilter" aria-label="Mes do desempenho diario">
-              <option value="">Mes atual</option>
-            </select>
           </div>
         </div>
 
@@ -153,7 +148,7 @@
         </div>
       </section>
 
-      <section class="panel panel-wide">
+      <section id="reports" class="panel panel-wide">
         <div class="panel-header">
           <div>
             <h2>Transacoes</h2>

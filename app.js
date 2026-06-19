@@ -31,12 +31,21 @@ const currencyFormatter = new Intl.NumberFormat("pt-BR", {
   currency: "BRL",
 });
 
-const numberFormatter = new Intl.NumberFormat("pt-BR");
+const compactCurrencyFormatter = new Intl.NumberFormat("pt-BR", {
+  style: "currency",
+  currency: "BRL",
+  maximumFractionDigits: 0,
+});
 
+const numberFormatter = new Intl.NumberFormat("pt-BR");
 const percentFormatter = new Intl.NumberFormat("pt-BR", {
   maximumFractionDigits: 1,
   minimumFractionDigits: 1,
 });
+
+function getElement(id) {
+  return document.getElementById(id);
+}
 
 function normalizeText(value) {
   return String(value ?? "")
@@ -46,28 +55,16 @@ function normalizeText(value) {
     .toLowerCase();
 }
 
-function getElement(id) {
-  return document.getElementById(id);
-}
-
 function formatCurrency(value) {
   return currencyFormatter.format(Number(value) || 0);
 }
 
 function formatCurrencyCompact(value) {
-  return Number(value || 0).toLocaleString("pt-BR", {
-    style: "currency",
-    currency: "BRL",
-    maximumFractionDigits: 0,
-  });
+  return compactCurrencyFormatter.format(Number(value) || 0);
 }
 
 function formatPercent(value) {
   return `${percentFormatter.format(Number(value) || 0)}%`;
-}
-
-function isValidDate(date) {
-  return date instanceof Date && !Number.isNaN(date.getTime());
 }
 
 function findKey(keys, candidates) {
@@ -87,19 +84,15 @@ function parseAmount(value) {
   let cleaned = original.replace(/[^\d,.-]/g, "");
 
   if (cleaned.includes(",") && cleaned.includes(".")) {
-    if (cleaned.lastIndexOf(",") > cleaned.lastIndexOf(".")) {
-      cleaned = cleaned.replace(/\./g, "").replace(",", ".");
-    } else {
-      cleaned = cleaned.replace(/,/g, "");
-    }
+    cleaned = cleaned.lastIndexOf(",") > cleaned.lastIndexOf(".")
+      ? cleaned.replace(/\./g, "").replace(",", ".")
+      : cleaned.replace(/,/g, "");
   } else if (cleaned.includes(",")) {
     cleaned = cleaned.replace(/\./g, "").replace(",", ".");
   } else if (cleaned.includes(".")) {
     const parts = cleaned.split(".");
-    const integerPart = parts[0].replace("-", "");
     const decimalPart = parts[parts.length - 1];
-
-    if (parts.length > 2 || (decimalPart.length === 3 && integerPart.length <= 3)) {
+    if (parts.length > 2 || decimalPart.length === 3) {
       cleaned = cleaned.replace(/\./g, "");
     }
   }
@@ -110,140 +103,70 @@ function parseAmount(value) {
   return isNegative ? -Math.abs(parsed) : parsed;
 }
 
+function isValidDate(date) {
+  return date instanceof Date && !Number.isNaN(date.getTime());
+}
+
 function parseDate(value) {
   if (isValidDate(value)) return value;
-  if (typeof value === "number" && value > 20000) {
-    return new Date(Math.round((value - 25569) * 86400 * 1000));
-  }
 
   const text = String(value ?? "").trim();
   if (!text) return null;
 
   const isoMatch = text.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
   if (isoMatch) {
-    const year = Number(isoMatch[1]);
-    const month = Number(isoMatch[2]) - 1;
-    const day = Number(isoMatch[3]);
-    const date = new Date(year, month, day);
+    const date = new Date(Number(isoMatch[1]), Number(isoMatch[2]) - 1, Number(isoMatch[3]));
     return isValidDate(date) ? date : null;
   }
 
   const dateMatch = text.match(/^(\d{1,2})[/. -](\d{1,2})[/. -](\d{2,4})$/);
   if (dateMatch) {
-    const day = Number(dateMatch[1]);
-    const month = Number(dateMatch[2]) - 1;
-    const year = Number(dateMatch[3].length === 2 ? `20${dateMatch[3]}` : dateMatch[3]);
-    const date = new Date(year, month, day);
+    const yearText = dateMatch[3];
+    const year = Number(yearText.length === 2 ? `20${yearText}` : yearText);
+    const date = new Date(year, Number(dateMatch[2]) - 1, Number(dateMatch[1]));
     return isValidDate(date) ? date : null;
-  }
-
-  const monthYearMatch = text.match(/^(\d{1,2})[/. -](\d{2,4})$/);
-  if (monthYearMatch) {
-    const month = Number(monthYearMatch[1]) - 1;
-    const year = Number(monthYearMatch[2].length === 2 ? `20${monthYearMatch[2]}` : monthYearMatch[2]);
-    const date = new Date(year, month, 1);
-    return isValidDate(date) ? date : null;
-  }
-
-  if (/[a-zA-Z]/.test(text)) {
-    const parsed = new Date(text);
-    return isValidDate(parsed) ? parsed : null;
   }
 
   return null;
 }
 
 function monthInfoFromDate(date) {
-  if (!isValidDate(date)) return null;
+  if (!isValidDate(date)) {
+    return { key: "sem-mes", label: "Sem mes", sort: 999999 };
+  }
+
   const year = date.getFullYear();
   const month = date.getMonth();
-  const meta = monthCatalog[month];
-
   return {
     key: `${year}-${String(month + 1).padStart(2, "0")}`,
-    label: `${meta.label}/${year}`,
+    label: `${monthCatalog[month].label}/${year}`,
+    displayLabel: `${monthCatalog[month].label} ${year}`,
     sort: year * 12 + month,
   };
 }
 
-function monthInfoFromText(value) {
-  const text = normalizeText(value);
-  if (!text) return null;
-
-  const parsedDate = parseDate(value);
-  if (parsedDate) return monthInfoFromDate(parsedDate);
-
-  const yearMatch = text.match(/(19\d{2}|20\d{2})/);
-  const year = yearMatch ? Number(yearMatch[1]) : new Date().getFullYear();
-
-  const found = monthCatalog.find((month) =>
-    month.aliases.some((alias) => {
-      return (
-        text === alias ||
-        text.startsWith(`${alias} `) ||
-        text.startsWith(`${alias}/`) ||
-        text.startsWith(`${alias}-`) ||
-        text.includes(` ${alias} `) ||
-        text.endsWith(` ${alias}`) ||
-        text.includes(` ${alias}/`) ||
-        text.includes(` ${alias}-`)
-      );
-    })
-  );
-
-  if (!found) return null;
-
-  return {
-    key: `${year}-${String(found.index + 1).padStart(2, "0")}`,
-    label: `${found.label}/${year}`,
-    sort: year * 12 + found.index,
-  };
-}
-
-function isMonthColumn(key) {
-  const normalized = normalizeText(key);
-  if (!normalized || normalized.includes("status") || normalized.includes("data")) return false;
-  return Boolean(monthInfoFromText(key));
-}
-
 function buildStatus(value) {
   const normalized = normalizeText(value);
-  if (!normalized) return "Pendente";
-  if (["pago", "quitado", "liquidado", "recebido", "sim", "ok", "concluido"].some((term) => normalized.includes(term))) {
+  if (["pago", "quitado", "liquidado", "recebido", "ok", "sim"].some((term) => normalized.includes(term))) {
     return "Liquidado";
   }
   if (["atras", "vencido"].some((term) => normalized.includes(term))) {
     return "Atrasado";
   }
-  if (["cancel"].some((term) => normalized.includes(term))) {
-    return "Cancelado";
-  }
   return "Pendente";
 }
 
-function buildType(value, amount, fallback = "saida") {
+function buildType(value, fallback) {
   const normalized = normalizeText(value);
-
-  if (["entrada", "receita", "recebimento", "credito", "venda", "faturamento"].some((term) => normalized.includes(term))) {
-    return "entrada";
-  }
-
-  if (["saida", "despesa", "custo", "debito", "pagamento", "conta"].some((term) => normalized.includes(term))) {
-    return "saida";
-  }
-
-  if (Number(amount) < 0) return "saida";
+  if (["entrada", "receita", "credito", "recebimento", "venda"].some((term) => normalized.includes(term))) return "entrada";
+  if (["saida", "despesa", "debito", "custo", "pagamento"].some((term) => normalized.includes(term))) return "saida";
   return fallback;
 }
 
-function labelType(type) {
-  if (type === "conta") return "Conta";
-  return type === "entrada" ? "Entrada" : "Saida";
-}
-
-function compact(value, fallback) {
-  const text = String(value ?? "").trim();
-  return text || fallback;
+function typeLabel(type) {
+  if (type === "entrada") return "Entrada";
+  if (type === "saida") return "Saida";
+  return "Conta";
 }
 
 function normalizeRows(rows) {
@@ -251,150 +174,59 @@ function normalizeRows(rows) {
 
   const keys = Object.keys(rows[0]).filter(Boolean);
   const descKey = findKey(keys, ["descr", "descricao", "titulo", "cliente", "item", "nome", "name"]);
-  const categoryKey = findKey(keys, ["categoria", "category", "grupo", "segmento", "departamento"]);
-  const typeKey = findKey(keys, ["tipo", "natureza", "movimento", "entrada saida", "entrada/saida"]);
-  const sourceKey = findKey(keys, ["fonte", "origem", "conta", "banco", "fornecedor", "cliente"]);
+  const amountKey = findKey(keys, ["valor", "amount", "value", "total", "preco", "price"]);
+  const statusKey = findKey(keys, ["status", "estado", "situacao", "pago"]);
+  const dateKey = findKey(keys, ["data", "date", "vencimento", "pagamento", "lancamento"]);
+  const typeKey = findKey(keys, ["tipo", "natureza", "movimento"]);
+  const categoryKey = findKey(keys, ["categoria", "category", "grupo", "segmento"]);
+  const sourceKey = findKey(keys, ["fonte", "origem", "conta", "banco", "fornecedor"]);
   const revenueKey = findKey(keys, ["receita", "faturamento", "entrada"]);
   const expenseKey = findKey(keys, ["despesa", "custo", "saida"]);
-  const hasSplitValues = Boolean(revenueKey && expenseKey);
-  const amountKey = findKey(keys, ["valor", "amount", "value", "total", "preco", "price"]);
   const simpleAccountMode = Boolean(amountKey && !typeKey && !revenueKey && !expenseKey);
-  const statusKey = findKey(keys, ["status", "pago", "estado", "situacao"]);
-  const dateKey = findKey(keys, ["data", "date", "vencimento", "pagamento", "lancamento"]);
-  const monthKey = findKey(keys, ["mes", "competencia", "periodo"]);
-  const monthColumns = keys.filter(isMonthColumn);
 
-  if (monthColumns.length && (!amountKey || monthColumns.length > 1)) {
-    return rows.flatMap((row, rowIndex) => {
-      return monthColumns
-        .map((monthColumn) => {
-          const amount = parseAmount(row[monthColumn]);
-          if (amount === 0) return null;
+  return rows.flatMap((row, rowIndex) => {
+    const date = dateKey ? parseDate(row[dateKey]) : null;
+    const monthInfo = monthInfoFromDate(date);
+    const description = String(descKey ? row[descKey] : `Registro ${rowIndex + 1}`).trim() || `Registro ${rowIndex + 1}`;
+    const category = String(categoryKey ? row[categoryKey] : "Contas").trim() || "Contas";
+    const source = String(sourceKey ? row[sourceKey] : category).trim() || category;
+    const status = buildStatus(statusKey ? row[statusKey] : "");
+    const entries = [];
 
-          const monthInfo = monthInfoFromText(monthColumn);
+    if (revenueKey || expenseKey) {
+      const revenue = revenueKey ? Math.abs(parseAmount(row[revenueKey])) : 0;
+      const expense = expenseKey ? Math.abs(parseAmount(row[expenseKey])) : 0;
+      if (revenue) entries.push(buildItem({ description, category, source, status, date, monthInfo, amount: revenue, type: "entrada" }));
+      if (expense) entries.push(buildItem({ description, category, source, status, date, monthInfo, amount: expense, type: "saida" }));
+      return entries;
+    }
 
-          return buildItem({
-            row,
-            rowIndex,
-            descKey,
-            categoryKey,
-            sourceKey,
-            typeKey,
-            statusKey,
-            amount,
-            date: null,
-            monthInfo,
-            fallbackType: simpleAccountMode ? "conta" : buildType(typeKey ? row[typeKey] : "", amount),
-          });
-        })
-        .filter(Boolean);
-    });
-  }
+    const amount = Math.abs(parseAmount(amountKey ? row[amountKey] : 0));
+    if (!amount && !description) return [];
 
-  if (hasSplitValues) {
-    return rows.flatMap((row, rowIndex) => {
-      const date = dateKey ? parseDate(row[dateKey]) : null;
-      const monthInfo = date ? monthInfoFromDate(date) : monthKey ? monthInfoFromText(row[monthKey]) : null;
-      const entries = [];
-      const revenue = parseAmount(row[revenueKey]);
-      const expense = parseAmount(row[expenseKey]);
-
-      if (revenue !== 0) {
-        entries.push(
-          buildItem({
-            row,
-            rowIndex,
-            descKey,
-            categoryKey,
-            sourceKey,
-            typeKey,
-            statusKey,
-            amount: revenue,
-            date,
-            monthInfo,
-            fallbackType: "entrada",
-          })
-        );
-      }
-
-      if (expense !== 0) {
-        entries.push(
-          buildItem({
-            row,
-            rowIndex,
-            descKey,
-            categoryKey,
-            sourceKey,
-            typeKey,
-            statusKey,
-            amount: expense,
-            date,
-            monthInfo,
-            fallbackType: "saida",
-          })
-        );
-      }
-
-      return entries.filter(Boolean);
-    });
-  }
-
-  return rows
-    .map((row, rowIndex) => {
-      const date = dateKey ? parseDate(row[dateKey]) : null;
-      const monthInfo = date ? monthInfoFromDate(date) : monthKey ? monthInfoFromText(row[monthKey]) : null;
-      const amountValue = amountKey ? parseAmount(row[amountKey]) : revenueKey ? parseAmount(row[revenueKey]) : 0;
-      const fallbackType = simpleAccountMode ? "conta" : revenueKey && !amountKey ? "entrada" : "saida";
-
-      return buildItem({
-        row,
-        rowIndex,
-        descKey,
-        categoryKey,
-        sourceKey,
-        typeKey,
-        statusKey,
-        amount: amountValue,
-        date,
-        monthInfo,
-        fallbackType,
-      });
-    })
-    .filter(Boolean);
+    const type = buildType(typeKey ? row[typeKey] : "", simpleAccountMode ? "conta" : "saida");
+    return [buildItem({ description, category, source, status, date, monthInfo, amount, type })];
+  });
 }
 
-function buildItem({ row, rowIndex, descKey, categoryKey, sourceKey, typeKey, statusKey, amount, date, monthInfo, fallbackType = "saida" }) {
-  const description = compact(descKey ? row[descKey] : "", `Registro ${rowIndex + 1}`);
-  const category = compact(categoryKey ? row[categoryKey] : "", "Sem categoria");
-  const source = compact(sourceKey ? row[sourceKey] : "", category);
-  const status = buildStatus(statusKey ? row[statusKey] : "");
-  const type = buildType(typeKey ? row[typeKey] : "", amount, fallbackType);
-  const absoluteAmount = Math.abs(Number(amount) || 0);
-  const resolvedMonth = monthInfo || monthInfoFromDate(date) || {
-    key: "sem-mes",
-    label: "Sem mes",
-    sort: 999999,
-  };
-
-  if (!description && !category && !absoluteAmount) return null;
-
+function buildItem({ description, category, source, status, date, monthInfo, amount, type }) {
   return {
     description,
     category,
     source,
     status,
     type,
-    typeLabel: labelType(type),
-    amount: absoluteAmount,
-    signedAmount: type === "entrada" || type === "conta" ? absoluteAmount : -absoluteAmount,
-    receita: type === "entrada" ? absoluteAmount : 0,
-    despesa: type === "saida" ? absoluteAmount : 0,
-    lucro: type === "entrada" ? absoluteAmount : -absoluteAmount,
+    typeLabel: typeLabel(type),
+    amount,
+    signedAmount: type === "saida" ? -amount : amount,
+    receita: type === "entrada" ? amount : 0,
+    despesa: type === "saida" ? amount : 0,
+    lucro: type === "entrada" ? amount : type === "saida" ? -amount : 0,
     date,
-    monthKey: resolvedMonth.key,
-    monthLabel: resolvedMonth.label,
-    monthSort: resolvedMonth.sort,
-    searchable: normalizeText(`${description} ${category} ${source} ${status} ${labelType(type)} ${resolvedMonth.label}`),
+    monthKey: monthInfo.key,
+    monthLabel: monthInfo.label,
+    monthDisplayLabel: monthInfo.displayLabel,
+    monthSort: monthInfo.sort,
   };
 }
 
@@ -408,8 +240,7 @@ function buildSourceUrls() {
 }
 
 function withCacheBuster(url) {
-  const separator = url.includes("?") ? "&" : "?";
-  return `${url}${separator}t=${Date.now()}`;
+  return `${url}${url.includes("?") ? "&" : "?"}t=${Date.now()}`;
 }
 
 async function loadCsvText() {
@@ -419,11 +250,8 @@ async function loadCsvText() {
     try {
       const response = await fetch(withCacheBuster(url), { cache: "no-store" });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
-
       const text = await response.text();
-      if (!text.trim() || text.trim().startsWith("<")) {
-        throw new Error("A resposta nao parece ser CSV.");
-      }
+      if (!text.trim() || text.trim().startsWith("<")) throw new Error("A resposta nao parece ser CSV.");
       return text;
     } catch (error) {
       lastError = error;
@@ -447,226 +275,116 @@ function parseCsv(text) {
   return result.data.filter((row) => Object.values(row).some((value) => String(value ?? "").trim()));
 }
 
-function setSelectOptions(select, options, allLabel) {
-  if (!select) return;
-  const currentValue = select.value;
-  select.innerHTML = "";
-
-  const allOption = document.createElement("option");
-  allOption.value = "";
-  allOption.textContent = allLabel;
-  select.appendChild(allOption);
-
-  options.forEach((option) => {
-    const element = document.createElement("option");
-    element.value = option.value;
-    element.textContent = option.displayLabel || option.label;
-    select.appendChild(element);
-  });
-
-  if (options.some((option) => option.value === currentValue)) {
-    select.value = currentValue;
-  }
-}
-
-function updateFilters(items) {
-  const months = Array.from(
-    new Map(items.map((item) => [item.monthKey, { value: item.monthKey, label: item.monthLabel, displayLabel: labelFromMonthKey(item.monthKey), sort: item.monthSort }])).values()
-  )
-    .filter((month) => month.value !== "sem-mes")
-    .sort((a, b) => b.sort - a.sort);
-
-  setSelectOptions(getElement("dailyMonthFilter"), months, "Mes atual");
-  const currentYear = getElement("currentYear");
-  if (currentYear) currentYear.textContent = String(new Date().getFullYear());
-}
-
-function getFilteredItems(options = {}) {
-  const context = getPeriodContext(state.items);
-
-  return options.previous ? context.previousItems : context.currentItems;
-}
-
-function aggregateBy(items, keyBuilder) {
-  return Array.from(
-    items.reduce((map, item) => {
-      const key = keyBuilder(item);
-      const current =
-        map.get(key.value) || { ...key, amount: 0, paidAmount: 0, pendingAmount: 0, lateAmount: 0, receita: 0, despesa: 0, lucro: 0, count: 0 };
-      current.amount += item.amount;
-      if (item.status === "Liquidado") current.paidAmount += item.amount;
-      if (item.status === "Pendente") current.pendingAmount += item.amount;
-      if (item.status === "Atrasado") current.lateAmount += item.amount;
-      current.receita += item.receita;
-      current.despesa += item.despesa;
-      current.lucro += item.lucro;
-      current.count += 1;
-      map.set(key.value, current);
-      return map;
-    }, new Map()).values()
-  );
+function isAccountsMode(items) {
+  return items.length > 0 && items.every((item) => item.type === "conta");
 }
 
 function calculateTotals(items) {
-  const totals = items.reduce(
-    (acc, item) => {
-      acc.totalAmount += item.amount;
-      acc.receita += item.receita;
-      acc.despesa += item.despesa;
-      acc.lucro += item.lucro;
-      acc.count += 1;
-      if (item.status === "Liquidado") {
-        acc.liquidado += 1;
-        acc.paidAmount += item.amount;
-      }
-      if (item.status === "Pendente") {
-        acc.pendente += 1;
-        acc.pendingAmount += item.amount;
-      }
-      if (item.status === "Atrasado") {
-        acc.atrasado += 1;
-        acc.lateAmount += item.amount;
-      }
-      return acc;
-    },
-    {
-      totalAmount: 0,
-      paidAmount: 0,
-      pendingAmount: 0,
-      lateAmount: 0,
-      receita: 0,
-      despesa: 0,
-      lucro: 0,
-      count: 0,
-      liquidado: 0,
-      pendente: 0,
-      atrasado: 0,
+  const totals = {
+    totalAmount: 0,
+    paidAmount: 0,
+    pendingAmount: 0,
+    lateAmount: 0,
+    openAmount: 0,
+    receita: 0,
+    despesa: 0,
+    lucro: 0,
+    count: 0,
+    liquidado: 0,
+    pendente: 0,
+    atrasado: 0,
+  };
+
+  items.forEach((item) => {
+    totals.totalAmount += item.amount;
+    totals.receita += item.receita;
+    totals.despesa += item.despesa;
+    totals.lucro += item.lucro;
+    totals.count += 1;
+
+    if (item.status === "Liquidado") {
+      totals.liquidado += 1;
+      totals.paidAmount += item.amount;
+    } else if (item.status === "Atrasado") {
+      totals.atrasado += 1;
+      totals.lateAmount += item.amount;
+    } else {
+      totals.pendente += 1;
+      totals.pendingAmount += item.amount;
     }
-  );
+  });
 
   totals.openAmount = totals.pendingAmount + totals.lateAmount;
   totals.margem = totals.receita ? (totals.lucro / totals.receita) * 100 : 0;
-  totals.saldo = totals.lucro;
   return totals;
 }
 
 function aggregateMonthly(items) {
-  const grouped = aggregateBy(items, (item) => ({
-    value: item.monthKey,
-    label: item.monthLabel,
-    sort: item.monthSort,
-  })).sort((a, b) => a.sort - b.sort);
+  const map = new Map();
 
-  let saldo = 0;
-  return grouped.map((row) => {
-    saldo += row.lucro;
-    return {
-      ...row,
-      saldo,
-      margem: row.receita ? (row.lucro / row.receita) * 100 : 0,
-    };
+  items.forEach((item) => {
+    const current =
+      map.get(item.monthKey) || {
+        value: item.monthKey,
+        label: item.monthLabel,
+        displayLabel: item.monthDisplayLabel,
+        sort: item.monthSort,
+        totalAmount: 0,
+        paidAmount: 0,
+        openAmount: 0,
+        receita: 0,
+        despesa: 0,
+        lucro: 0,
+        count: 0,
+      };
+
+    current.totalAmount += item.amount;
+    current.receita += item.receita;
+    current.despesa += item.despesa;
+    current.lucro += item.lucro;
+    current.count += 1;
+
+    if (item.status === "Liquidado") current.paidAmount += item.amount;
+    if (item.status !== "Liquidado") current.openAmount += item.amount;
+
+    map.set(item.monthKey, current);
   });
+
+  return Array.from(map.values())
+    .filter((row) => row.value !== "sem-mes")
+    .sort((a, b) => a.sort - b.sort);
 }
 
-function monthSortYear(sort) {
-  return Math.floor(sort / 12);
-}
+function updateMonthFilters(items) {
+  const months = aggregateMonthly(items).sort((a, b) => b.sort - a.sort);
+  const periodFilter = getElement("periodFilter");
+  const currentValue = periodFilter.value;
 
-function getValidMonthSorts(items) {
-  return Array.from(new Set(items.filter((item) => item.monthKey !== "sem-mes").map((item) => item.monthSort))).sort((a, b) => a - b);
-}
+  periodFilter.innerHTML = "";
+  periodFilter.appendChild(new Option("Todos os meses", "all"));
+  months.forEach((month) => periodFilter.appendChild(new Option(month.displayLabel, month.value)));
 
-function getPeriodContext(items) {
-  const period = getElement("periodFilter")?.value || "last12";
-  const monthSorts = getValidMonthSorts(items);
-
-  if (!monthSorts.length || period === "all") {
-    return {
-      currentItems: items,
-      previousItems: [],
-      label: period === "all" ? "Todos os dados" : "Sem periodo definido",
-    };
+  if (months.some((month) => month.value === currentValue)) {
+    periodFilter.value = currentValue;
+  } else {
+    periodFilter.value = "all";
   }
 
-  const maxSort = monthSorts[monthSorts.length - 1];
-
-  if (period === "currentYear") {
-    const year = new Date().getFullYear();
-    const previousYear = year - 1;
-
-    return {
-      currentItems: items.filter((item) => item.monthKey === "sem-mes" || monthSortYear(item.monthSort) === year),
-      previousItems: items.filter((item) => monthSortYear(item.monthSort) === previousYear),
-      label: String(year),
-    };
-  }
-
-  const start = maxSort - 11;
-  const previousStart = maxSort - 23;
-  const previousEnd = maxSort - 12;
-
-  return {
-    currentItems: items.filter((item) => item.monthKey === "sem-mes" || (item.monthSort >= start && item.monthSort <= maxSort)),
-    previousItems: items.filter((item) => item.monthSort >= previousStart && item.monthSort <= previousEnd),
-    label: "ultimos 12 meses",
-  };
+  const currentYear = getElement("currentYear");
+  if (currentYear) currentYear.textContent = String(new Date().getFullYear());
 }
 
-function getPeriodLabel() {
-  return getPeriodContext(state.items).label;
+function getFilteredItems() {
+  const selectedMonth = getElement("periodFilter").value;
+  if (selectedMonth === "all") return state.items;
+  return state.items.filter((item) => item.monthKey === selectedMonth);
 }
 
-function variationPercent(current, previous) {
-  if (!previous && !current) return 0;
-  if (!previous) return current ? 100 : 0;
-  return ((current - previous) / Math.abs(previous)) * 100;
-}
-
-function setTrendBadge(id, current, previous, options = {}) {
-  const element = getElement(id);
-  if (!element) return;
-
-  const pct = variationPercent(current, previous);
-  const symbol = pct >= 0 ? "▲" : "▼";
-  element.textContent = `${symbol} ${formatPercent(Math.abs(pct))}`;
-  element.className = "trend-pill";
-
-  if (options.expense) {
-    element.classList.toggle("down", pct > 0);
-    element.classList.toggle("warn", pct < 0);
-    return;
-  }
-
-  element.classList.toggle("down", pct < 0);
-}
-
-function formatAxisCurrency(value) {
-  const abs = Math.abs(Number(value) || 0);
-  if (abs >= 1000000) return `${Math.round(value / 1000000)}m`;
-  if (abs >= 1000) return `${Math.round(value / 1000)}k`;
-  return `${Math.round(value)}`;
-}
-
-function setTrendBadge(id, current, previous, options = {}) {
-  const element = getElement(id);
-  if (!element) return;
-
-  const pct = variationPercent(current, previous);
-  const symbol = pct >= 0 ? "+" : "-";
-  element.textContent = `${symbol} ${formatPercent(Math.abs(pct))}`;
-  element.className = "trend-pill";
-
-  if (options.expense) {
-    element.classList.toggle("down", pct > 0);
-    element.classList.toggle("warn", pct < 0);
-    return;
-  }
-
-  element.classList.toggle("down", pct < 0);
-}
-
-function isAccountsMode(items) {
-  return items.length > 0 && !items.some((item) => item.type === "entrada" || item.type === "saida");
+function getSelectedMonthLabel() {
+  const selectedMonth = getElement("periodFilter").value;
+  if (selectedMonth === "all") return "todos os meses";
+  const found = aggregateMonthly(state.items).find((month) => month.value === selectedMonth);
+  return found ? found.displayLabel : "mes selecionado";
 }
 
 function setText(id, value) {
@@ -678,15 +396,15 @@ function updateModeLabels(accountsMode) {
   setText("cardTotalLabel", accountsMode ? "Valor Total" : "Receita Total");
   setText("cardExpenseLabel", accountsMode ? "Total Pago" : "Despesa Total");
   setText("cardProfitLabel", accountsMode ? "Total Pendente" : "Lucro Liquido");
-  setText("cardBalanceLabel", accountsMode ? "Em Aberto" : "Saldo em Caixa");
+  setText("cardBalanceLabel", accountsMode ? "Contas em Aberto" : "Saldo em Caixa");
   setText("monthlyTitle", accountsMode ? "Pagas vs Pendentes" : "Receita vs Despesa");
   setText("monthlyLegendA", accountsMode ? "Pagas" : "Receita");
   setText("monthlyLegendB", accountsMode ? "Pendentes" : "Despesa");
-  setText("dailyLegendA", accountsMode ? "Pagas" : "Receita");
-  setText("dailyLegendB", accountsMode ? "Pendentes" : "Despesa");
-  setText("dailyLegendC", accountsMode ? "Total" : "Lucro");
-  setText("dailyRevenueLabel", accountsMode ? "Pagas" : "Receita");
-  setText("dailyExpenseLabel", accountsMode ? "Pendentes" : "Despesa");
+  setText("dailyLegendA", accountsMode ? "Pago acumulado" : "Receita acumulada");
+  setText("dailyLegendB", accountsMode ? "Pendente acumulado" : "Despesa acumulada");
+  setText("dailyLegendC", accountsMode ? "Total acumulado" : "Lucro acumulado");
+  setText("dailyRevenueLabel", accountsMode ? "Pago" : "Receita");
+  setText("dailyExpenseLabel", accountsMode ? "Pendente" : "Despesa");
   setText("dailyProfitLabel", accountsMode ? "Total" : "Lucro");
   setText("tableTypeHeader", accountsMode ? "Classe" : "Tipo");
 }
@@ -698,94 +416,76 @@ function destroyChart(name) {
   }
 }
 
-function formatSignedCurrency(value) {
-  const sign = value > 0 ? "+" : value < 0 ? "-" : "";
-  return `${sign}${formatCurrency(Math.abs(value))}`;
+function formatAxisCurrency(value) {
+  const abs = Math.abs(Number(value) || 0);
+  if (abs >= 1000000) return `${Math.round(value / 1000000)}m`;
+  if (abs >= 1000) return `${Math.round(value / 1000)}k`;
+  return `${Math.round(value)}`;
 }
 
-function monthInfoFromOffset(offset) {
-  const now = new Date();
-  return monthInfoFromDate(new Date(now.getFullYear(), now.getMonth() + offset, 1));
+function chartGridColor() {
+  return "rgba(154, 180, 213, 0.12)";
 }
 
-function renderMonthlyChart(items) {
-  const currentMonthKey = monthInfoFromOffset(0).key;
-  const grouped = aggregateMonthly(items);
-
-  const singleYear = new Set(grouped.map((item) => monthSortYear(item.sort))).size === 1;
-  const labels = grouped.map((item) => (singleYear ? item.label.split("/")[0] : item.label));
-  const receitas = grouped.map((item) => item.receita);
-  const despesas = grouped.map((item) => item.despesa);
-
-  getElement("monthlyStats").textContent = grouped.length
-    ? `Comparativo mensal · ${getPeriodLabel()}`
-    : "Nenhum mes encontrado nos filtros atuais.";
-
-  destroyChart("monthly");
-  state.charts.monthly = new Chart(getElement("monthlyChart"), {
-    type: "bar",
-    data: {
-      labels,
-      datasets: [
-        {
-          label: "Receita",
-          data: receitas,
-          backgroundColor: grouped.map((item) => (item.value === currentMonthKey ? "rgba(72, 213, 151, 1)" : "rgba(72, 213, 151, 0.88)")),
-          borderColor: "#2dd4bf",
-          borderWidth: 1,
-          borderRadius: 5,
-          barPercentage: 0.72,
-          categoryPercentage: 0.7,
-        },
-        {
-          label: "Despesa",
-          data: despesas,
-          backgroundColor: grouped.map((item) => (item.value === currentMonthKey ? "rgba(255, 79, 94, 1)" : "rgba(255, 79, 94, 0.9)")),
-          borderColor: "#ff4f5e",
-          borderWidth: 1,
-          borderRadius: 5,
-          barPercentage: 0.72,
-          categoryPercentage: 0.7,
-        },
-      ],
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        legend: { display: false },
-        tooltip: {
-          callbacks: {
-            label: (context) => `${context.dataset.label}: ${formatCurrency(context.parsed.y)}`,
-          },
-        },
-      },
-      scales: {
-        y: {
-          ticks: { color: "#9ab4d5", callback: (value) => formatAxisCurrency(value) },
-          grid: { color: "rgba(154, 180, 213, 0.12)", borderDash: [4, 4] },
-        },
-        x: {
-          ticks: { color: "#9ab4d5" },
-          grid: { display: false },
-        },
-      },
-    },
-  });
+function setTrendClass(id, className = "trend-pill") {
+  const element = getElement(id);
+  if (element) element.className = className;
 }
 
-function renderMonthlyChart(items) {
-  const accountsMode = isAccountsMode(items);
-  const currentMonthKey = monthInfoFromOffset(0).key;
-  const grouped = aggregateMonthly(items);
-  const singleYear = new Set(grouped.map((item) => monthSortYear(item.sort))).size === 1;
-  const labels = grouped.map((item) => (singleYear ? item.label.split("/")[0] : item.label));
-  const primaryValues = grouped.map((item) => (accountsMode ? item.paidAmount : item.receita));
-  const secondaryValues = grouped.map((item) => (accountsMode ? item.pendingAmount + item.lateAmount : item.despesa));
+function renderDashboard() {
+  const items = getFilteredItems();
+  const accountsMode = isAccountsMode(state.items);
+  const totals = calculateTotals(items);
+  const openCount = totals.pendente + totals.atrasado;
+  updateModeLabels(accountsMode);
+  setTrendClass("cardRevenueChange");
+  setTrendClass("cardExpenseChange");
+  setTrendClass("cardProfitChange");
+  setTrendClass("cardBalanceChange");
 
-  getElement("monthlyStats").textContent = grouped.length
-    ? `Comparativo mensal - ${getPeriodLabel()}`
-    : "Nenhum mes encontrado nos filtros atuais.";
+  if (accountsMode) {
+    const paidPct = totals.count ? (totals.liquidado / totals.count) * 100 : 0;
+    const openPct = totals.count ? (openCount / totals.count) * 100 : 0;
+
+    setText("cardTotal", formatCurrencyCompact(totals.totalAmount));
+    setText("cardMonth", formatCurrencyCompact(totals.paidAmount));
+    setText("cardAverage", formatCurrencyCompact(totals.openAmount));
+    setText("cardBalance", numberFormatter.format(openCount));
+    setText("profitMarginText", `${numberFormatter.format(totals.pendente)} pendentes`);
+    setText("activeAccountsText", `${formatCurrencyCompact(totals.openAmount)} em aberto`);
+    setText("cardRevenueChange", `${numberFormatter.format(totals.count)} contas`);
+    setText("cardExpenseChange", formatPercent(paidPct));
+    setText("cardProfitChange", formatPercent(openPct));
+    setText("cardBalanceChange", `${numberFormatter.format(openCount)} abertas`);
+    setTrendClass("cardProfitChange", "trend-pill down");
+    setTrendClass("cardBalanceChange", "trend-pill warn");
+  } else {
+    const margem = totals.receita ? (totals.lucro / totals.receita) * 100 : 0;
+    setText("cardTotal", formatCurrencyCompact(totals.receita));
+    setText("cardMonth", formatCurrencyCompact(totals.despesa));
+    setText("cardAverage", formatCurrencyCompact(totals.lucro));
+    setText("cardBalance", formatCurrencyCompact(totals.lucro));
+    setText("profitMarginText", `margem ${formatPercent(margem)}`);
+    setText("activeAccountsText", `${numberFormatter.format(totals.count)} transacoes`);
+    setText("cardRevenueChange", `${numberFormatter.format(totals.count)} itens`);
+    setText("cardExpenseChange", formatPercent(totals.despesa ? 100 : 0));
+    setText("cardProfitChange", formatPercent(margem));
+    setText("cardBalanceChange", "atual");
+  }
+
+  renderMonthlyChart(items, accountsMode);
+  renderStatusChart(items);
+  renderAccumulatedChart(items, accountsMode);
+  renderTable(items);
+}
+
+function renderMonthlyChart(items, accountsMode) {
+  const rows = aggregateMonthly(items);
+  const labels = rows.map((row) => row.displayLabel);
+  const firstData = rows.map((row) => (accountsMode ? row.paidAmount : row.receita));
+  const secondData = rows.map((row) => (accountsMode ? row.openAmount : row.despesa));
+
+  setText("monthlyStats", rows.length ? `Comparativo mensal - ${getSelectedMonthLabel()}` : "Nenhum mes encontrado.");
 
   destroyChart("monthly");
   state.charts.monthly = new Chart(getElement("monthlyChart"), {
@@ -795,23 +495,19 @@ function renderMonthlyChart(items) {
       datasets: [
         {
           label: accountsMode ? "Pagas" : "Receita",
-          data: primaryValues,
-          backgroundColor: grouped.map((item) => (item.value === currentMonthKey ? "rgba(72, 213, 151, 1)" : "rgba(72, 213, 151, 0.88)")),
-          borderColor: "#2dd4bf",
+          data: firstData,
+          backgroundColor: "rgba(72, 213, 151, 0.9)",
+          borderColor: "#48d597",
           borderWidth: 1,
           borderRadius: 5,
-          barPercentage: 0.72,
-          categoryPercentage: 0.7,
         },
         {
           label: accountsMode ? "Pendentes" : "Despesa",
-          data: secondaryValues,
-          backgroundColor: grouped.map((item) => (item.value === currentMonthKey ? "rgba(255, 79, 94, 1)" : "rgba(255, 79, 94, 0.9)")),
+          data: secondData,
+          backgroundColor: "rgba(255, 79, 94, 0.9)",
           borderColor: "#ff4f5e",
           borderWidth: 1,
           borderRadius: 5,
-          barPercentage: 0.72,
-          categoryPercentage: 0.7,
         },
       ],
     },
@@ -820,34 +516,24 @@ function renderMonthlyChart(items) {
       maintainAspectRatio: false,
       plugins: {
         legend: { display: false },
-        tooltip: {
-          callbacks: {
-            label: (context) => `${context.dataset.label}: ${formatCurrency(context.parsed.y)}`,
-          },
-        },
+        tooltip: { callbacks: { label: (context) => `${context.dataset.label}: ${formatCurrency(context.parsed.y)}` } },
       },
       scales: {
         y: {
           ticks: { color: "#9ab4d5", callback: (value) => formatAxisCurrency(value) },
-          grid: { color: "rgba(154, 180, 213, 0.12)", borderDash: [4, 4] },
+          grid: { color: chartGridColor() },
         },
-        x: {
-          ticks: { color: "#9ab4d5" },
-          grid: { display: false },
-        },
+        x: { ticks: { color: "#9ab4d5" }, grid: { display: false } },
       },
     },
   });
 }
 
 function renderStatusChart(items) {
-  const paid = items.filter((item) => item.status === "Liquidado").length;
-  const pending = items.filter((item) => item.status === "Pendente").length;
-  const late = items.filter((item) => item.status === "Atrasado").length;
-
-  getElement("statusPaidCount").textContent = numberFormatter.format(paid);
-  getElement("statusPendingCount").textContent = numberFormatter.format(pending);
-  getElement("statusLateCount").textContent = numberFormatter.format(late);
+  const totals = calculateTotals(items);
+  setText("statusPaidCount", numberFormatter.format(totals.liquidado));
+  setText("statusPendingCount", numberFormatter.format(totals.pendente));
+  setText("statusLateCount", numberFormatter.format(totals.atrasado));
 
   destroyChart("status");
   state.charts.status = new Chart(getElement("statusChart"), {
@@ -856,11 +542,10 @@ function renderStatusChart(items) {
       labels: ["Pagas", "Pendentes", "Atrasadas"],
       datasets: [
         {
-          data: [paid, pending, late],
+          data: [totals.liquidado, totals.pendente, totals.atrasado],
           backgroundColor: ["#48d597", "#ffb632", "#ff4f5e"],
           borderColor: "#131a22",
           borderWidth: 5,
-          hoverOffset: 4,
         },
       ],
     },
@@ -876,62 +561,16 @@ function renderStatusChart(items) {
   });
 }
 
-function monthKeyParts(monthKey) {
-  const [year, month] = String(monthKey || "").split("-").map(Number);
-  if (!year || !month) return null;
-  return { year, monthIndex: month - 1 };
-}
+function renderAccumulatedChart(items, accountsMode) {
+  const selectedMonth = getElement("periodFilter").value;
+  const monthSelected = selectedMonth !== "all";
+  const rows = monthSelected ? buildDailyAccumulatedRows(items, accountsMode) : buildMonthlyAccumulatedRows(items, accountsMode);
+  const totals = calculateTotals(items);
 
-function resolveDailyMonth(items) {
-  const selected = getElement("dailyMonthFilter")?.value;
-  if (selected) return selected;
-
-  const current = monthInfoFromOffset(0);
-  if (items.some((item) => item.monthKey === current.key)) return current.key;
-
-  const sortedMonths = getValidMonthSorts(items);
-  if (!sortedMonths.length) return current.key;
-
-  const lastSort = sortedMonths[sortedMonths.length - 1];
-  const year = monthSortYear(lastSort);
-  const monthIndex = lastSort - year * 12;
-  return `${year}-${String(monthIndex + 1).padStart(2, "0")}`;
-}
-
-function labelFromMonthKey(monthKey) {
-  const parts = monthKeyParts(monthKey);
-  if (!parts) return "Mes atual";
-  return `${monthCatalog[parts.monthIndex].label} ${parts.year}`;
-}
-
-function renderDailyChart(items) {
-  const monthKey = resolveDailyMonth(items);
-  const parts = monthKeyParts(monthKey);
-  const monthItems = items.filter((item) => item.monthKey === monthKey && isValidDate(item.date));
-  const totals = calculateTotals(monthItems);
-
-  getElement("dailyRevenue").textContent = formatCurrencyCompact(totals.receita);
-  getElement("dailyExpense").textContent = formatCurrencyCompact(totals.despesa);
-  getElement("dailyProfit").textContent = formatCurrencyCompact(totals.lucro);
-  getElement("dailyStats").textContent = `Evolucao diaria · ${labelFromMonthKey(monthKey)}`;
-
-  const daysInMonth = parts ? new Date(parts.year, parts.monthIndex + 1, 0).getDate() : 31;
-  const rows = Array.from({ length: daysInMonth }, (_, index) => ({
-    day: index + 1,
-    label: String(index + 1).padStart(2, "0"),
-    receita: 0,
-    despesa: 0,
-    lucro: 0,
-  }));
-
-  monthItems.forEach((item) => {
-    const day = item.date.getDate();
-    const row = rows[day - 1];
-    if (!row) return;
-    row.receita += item.receita;
-    row.despesa += item.despesa;
-    row.lucro += item.lucro;
-  });
+  setText("dailyRevenue", formatCurrencyCompact(accountsMode ? totals.paidAmount : totals.receita));
+  setText("dailyExpense", formatCurrencyCompact(accountsMode ? totals.openAmount : totals.despesa));
+  setText("dailyProfit", formatCurrencyCompact(accountsMode ? totals.totalAmount : totals.lucro));
+  setText("dailyStats", monthSelected ? `Acumulado diario - ${getSelectedMonthLabel()}` : "Acumulado dos meses");
 
   destroyChart("daily");
   state.charts.daily = new Chart(getElement("dailyChart"), {
@@ -940,32 +579,32 @@ function renderDailyChart(items) {
       labels: rows.map((row) => row.label),
       datasets: [
         {
-          label: "Receita",
-          data: rows.map((row) => row.receita),
+          label: accountsMode ? "Pago acumulado" : "Receita acumulada",
+          data: rows.map((row) => row.first),
           borderColor: "#48d597",
           backgroundColor: "rgba(72, 213, 151, 0.08)",
-          pointRadius: 0,
+          pointRadius: 2,
           borderWidth: 3,
-          tension: 0.36,
+          tension: 0.32,
         },
         {
-          label: "Despesa",
-          data: rows.map((row) => row.despesa),
+          label: accountsMode ? "Pendente acumulado" : "Despesa acumulada",
+          data: rows.map((row) => row.second),
           borderColor: "#ff4f5e",
           backgroundColor: "rgba(255, 79, 94, 0.08)",
-          pointRadius: 0,
+          pointRadius: 2,
           borderWidth: 3,
-          tension: 0.36,
+          tension: 0.32,
         },
         {
-          label: "Lucro",
-          data: rows.map((row) => row.lucro),
+          label: accountsMode ? "Total acumulado" : "Lucro acumulado",
+          data: rows.map((row) => row.third),
           borderColor: "#00b8ff",
           backgroundColor: "rgba(0, 184, 255, 0.08)",
           borderDash: [5, 5],
-          pointRadius: 0,
+          pointRadius: 2,
           borderWidth: 2,
-          tension: 0.36,
+          tension: 0.32,
         },
       ],
     },
@@ -974,131 +613,64 @@ function renderDailyChart(items) {
       maintainAspectRatio: false,
       plugins: {
         legend: { display: false },
-        tooltip: {
-          callbacks: {
-            title: (contexts) => `${contexts[0].label}/${String(parts ? parts.monthIndex + 1 : new Date().getMonth() + 1).padStart(2, "0")}`,
-            label: (context) => `${context.dataset.label}: ${formatCurrency(context.parsed.y)}`,
-          },
-        },
+        tooltip: { callbacks: { label: (context) => `${context.dataset.label}: ${formatCurrency(context.parsed.y)}` } },
       },
       scales: {
-        y: {
-          ticks: { color: "#9ab4d5", callback: (value) => formatAxisCurrency(value) },
-          grid: { color: "rgba(154, 180, 213, 0.12)", borderDash: [4, 4] },
-        },
-        x: {
-          ticks: { color: "#9ab4d5", maxRotation: 0, autoSkip: true, maxTicksLimit: 31 },
-          grid: { display: false },
-        },
+        y: { ticks: { color: "#9ab4d5", callback: (value) => formatAxisCurrency(value) }, grid: { color: chartGridColor() } },
+        x: { ticks: { color: "#9ab4d5", maxRotation: 0 }, grid: { display: false } },
       },
     },
   });
 }
 
-function renderDailyChart(items) {
-  const accountsMode = isAccountsMode(items);
-  const monthKey = resolveDailyMonth(items);
-  const parts = monthKeyParts(monthKey);
-  const monthItems = items.filter((item) => item.monthKey === monthKey && isValidDate(item.date));
-  const totals = calculateTotals(monthItems);
+function buildMonthlyAccumulatedRows(items, accountsMode) {
+  let first = 0;
+  let second = 0;
+  let third = 0;
 
-  getElement("dailyRevenue").textContent = formatCurrencyCompact(accountsMode ? totals.paidAmount : totals.receita);
-  getElement("dailyExpense").textContent = formatCurrencyCompact(accountsMode ? totals.openAmount : totals.despesa);
-  getElement("dailyProfit").textContent = formatCurrencyCompact(accountsMode ? totals.totalAmount : totals.lucro);
-  getElement("dailyStats").textContent = `Evolucao diaria - ${labelFromMonthKey(monthKey)}`;
+  return aggregateMonthly(items).map((row) => {
+    first += accountsMode ? row.paidAmount : row.receita;
+    second += accountsMode ? row.openAmount : row.despesa;
+    third += accountsMode ? row.totalAmount : row.lucro;
+    return { label: row.displayLabel, first, second, third };
+  });
+}
 
-  const daysInMonth = parts ? new Date(parts.year, parts.monthIndex + 1, 0).getDate() : 31;
+function buildDailyAccumulatedRows(items, accountsMode) {
+  const datedItems = items.filter((item) => isValidDate(item.date));
+  const lastDate = datedItems.reduce((latest, item) => (latest && latest > item.date ? latest : item.date), null);
+  const daysInMonth = lastDate ? new Date(lastDate.getFullYear(), lastDate.getMonth() + 1, 0).getDate() : 31;
   const rows = Array.from({ length: daysInMonth }, (_, index) => ({
     label: String(index + 1).padStart(2, "0"),
-    primary: 0,
-    secondary: 0,
-    tertiary: 0,
+    first: 0,
+    second: 0,
+    third: 0,
   }));
 
-  monthItems.forEach((item) => {
+  datedItems.forEach((item) => {
     const row = rows[item.date.getDate() - 1];
     if (!row) return;
-
-    if (accountsMode) {
-      if (item.status === "Liquidado") row.primary += item.amount;
-      if (item.status !== "Liquidado") row.secondary += item.amount;
-      row.tertiary += item.amount;
-      return;
-    }
-
-    row.primary += item.receita;
-    row.secondary += item.despesa;
-    row.tertiary += item.lucro;
+    row.first += accountsMode ? (item.status === "Liquidado" ? item.amount : 0) : item.receita;
+    row.second += accountsMode ? (item.status === "Liquidado" ? 0 : item.amount) : item.despesa;
+    row.third += accountsMode ? item.amount : item.lucro;
   });
 
-  destroyChart("daily");
-  state.charts.daily = new Chart(getElement("dailyChart"), {
-    type: "line",
-    data: {
-      labels: rows.map((row) => row.label),
-      datasets: [
-        {
-          label: accountsMode ? "Pagas" : "Receita",
-          data: rows.map((row) => row.primary),
-          borderColor: "#48d597",
-          backgroundColor: "rgba(72, 213, 151, 0.08)",
-          pointRadius: 0,
-          borderWidth: 3,
-          tension: 0.36,
-        },
-        {
-          label: accountsMode ? "Pendentes" : "Despesa",
-          data: rows.map((row) => row.secondary),
-          borderColor: "#ff4f5e",
-          backgroundColor: "rgba(255, 79, 94, 0.08)",
-          pointRadius: 0,
-          borderWidth: 3,
-          tension: 0.36,
-        },
-        {
-          label: accountsMode ? "Total" : "Lucro",
-          data: rows.map((row) => row.tertiary),
-          borderColor: "#00b8ff",
-          backgroundColor: "rgba(0, 184, 255, 0.08)",
-          borderDash: [5, 5],
-          pointRadius: 0,
-          borderWidth: 2,
-          tension: 0.36,
-        },
-      ],
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        legend: { display: false },
-        tooltip: {
-          callbacks: {
-            title: (contexts) => `${contexts[0].label}/${String(parts ? parts.monthIndex + 1 : new Date().getMonth() + 1).padStart(2, "0")}`,
-            label: (context) => `${context.dataset.label}: ${formatCurrency(context.parsed.y)}`,
-          },
-        },
-      },
-      scales: {
-        y: {
-          ticks: { color: "#9ab4d5", callback: (value) => formatAxisCurrency(value) },
-          grid: { color: "rgba(154, 180, 213, 0.12)", borderDash: [4, 4] },
-        },
-        x: {
-          ticks: { color: "#9ab4d5", maxRotation: 0, autoSkip: true, maxTicksLimit: 31 },
-          grid: { display: false },
-        },
-      },
-    },
+  let first = 0;
+  let second = 0;
+  let third = 0;
+  return rows.map((row) => {
+    first += row.first;
+    second += row.second;
+    third += row.third;
+    return { label: row.label, first, second, third };
   });
 }
 
 function renderTable(items) {
   const tbody = document.querySelector("#dataTable tbody");
   tbody.innerHTML = "";
-
-  const sorted = [...items].sort((a, b) => b.monthSort - a.monthSort).slice(0, 100);
-  getElement("tableStats").textContent = `${numberFormatter.format(items.length)} registro(s) filtrados.`;
+  const sorted = [...items].sort((a, b) => b.monthSort - a.monthSort || (b.date || 0) - (a.date || 0));
+  setText("tableStats", `${numberFormatter.format(sorted.length)} registro(s) filtrados.`);
 
   if (!sorted.length) {
     const row = document.createElement("tr");
@@ -1108,17 +680,16 @@ function renderTable(items) {
   }
 
   sorted.forEach((item) => {
-    const row = document.createElement("tr");
     const statusClass = item.status === "Liquidado" ? "status-paid" : item.status === "Pendente" ? "status-pending" : "status-other";
     const typeClass = item.type === "entrada" ? "type-income" : item.type === "saida" ? "type-expense" : "type-account";
-
+    const row = document.createElement("tr");
     row.innerHTML = `
       <td>${escapeHtml(item.description)}</td>
       <td><span class="type-pill ${typeClass}">${escapeHtml(item.typeLabel)}</span></td>
       <td>${escapeHtml(item.category)}</td>
       <td>${escapeHtml(item.monthLabel)}</td>
       <td><span class="status-pill ${statusClass}">${escapeHtml(item.status)}</span></td>
-      <td>${formatSignedCurrency(item.signedAmount)}</td>
+      <td>${formatCurrency(item.signedAmount)}</td>
     `;
     tbody.appendChild(row);
   });
@@ -1133,56 +704,27 @@ function escapeHtml(value) {
     .replace(/'/g, "&#039;");
 }
 
-function renderDashboard() {
+function exportCurrentData() {
   const items = getFilteredItems();
-  const previousItems = getFilteredItems({ previous: true });
-  const totals = calculateTotals(items);
-  const previousTotals = calculateTotals(previousItems);
-  const accountsMode = isAccountsMode(items);
-  const monthlyRows = aggregateMonthly(items);
-  const saldoAtual = monthlyRows.length ? monthlyRows[monthlyRows.length - 1].saldo : totals.lucro;
-  const previousSaldo = calculateTotals(previousItems).lucro;
-  const activeAccounts = new Set(items.map((item) => item.source || item.category).filter(Boolean)).size;
-  updateModeLabels(accountsMode);
+  const headers = ["Data", "Descricao", "Classe", "Status", "Valor"];
+  const rows = items.map((item) => [
+    item.date ? item.date.toLocaleDateString("pt-BR") : "",
+    item.description,
+    item.typeLabel,
+    item.status,
+    item.amount,
+  ]);
 
-  if (accountsMode) {
-    const openCount = totals.pendente + totals.atrasado;
-    const paidPct = totals.count ? (totals.liquidado / totals.count) * 100 : 0;
-    const openPct = totals.count ? (openCount / totals.count) * 100 : 0;
-
-    getElement("cardTotal").textContent = formatCurrencyCompact(totals.totalAmount);
-    getElement("cardMonth").textContent = formatCurrencyCompact(totals.paidAmount);
-    getElement("cardAverage").textContent = formatCurrencyCompact(totals.openAmount);
-    getElement("cardBalance").textContent = numberFormatter.format(openCount);
-    getElement("profitMarginText").textContent = `${numberFormatter.format(totals.pendente)} pendentes`;
-    getElement("activeAccountsText").textContent = `${formatCurrencyCompact(totals.openAmount)} em aberto`;
-
-    getElement("cardRevenueChange").textContent = `${numberFormatter.format(totals.count)} contas`;
-    getElement("cardRevenueChange").className = "trend-pill";
-    getElement("cardExpenseChange").textContent = formatPercent(paidPct);
-    getElement("cardExpenseChange").className = "trend-pill";
-    getElement("cardProfitChange").textContent = formatPercent(openPct);
-    getElement("cardProfitChange").className = "trend-pill down";
-    getElement("cardBalanceChange").textContent = `${numberFormatter.format(openCount)} abertas`;
-    getElement("cardBalanceChange").className = "trend-pill warn";
-  } else {
-    getElement("cardTotal").textContent = formatCurrencyCompact(totals.receita);
-    getElement("cardMonth").textContent = formatCurrencyCompact(totals.despesa);
-    getElement("cardAverage").textContent = formatCurrencyCompact(totals.lucro);
-    getElement("cardBalance").textContent = formatCurrencyCompact(saldoAtual);
-    getElement("profitMarginText").textContent = `margem ${formatPercent(totals.margem)}`;
-    getElement("activeAccountsText").textContent = `${numberFormatter.format(activeAccounts)} contas ativas`;
-
-    setTrendBadge("cardRevenueChange", totals.receita, previousTotals.receita);
-    setTrendBadge("cardExpenseChange", totals.despesa, previousTotals.despesa, { expense: true });
-    setTrendBadge("cardProfitChange", totals.lucro, previousTotals.lucro);
-    setTrendBadge("cardBalanceChange", saldoAtual, previousSaldo, { expense: saldoAtual < 0 });
-  }
-
-  renderMonthlyChart(items);
-  renderStatusChart(items);
-  renderDailyChart(items);
-  renderTable(items);
+  const csv = [headers, ...rows]
+    .map((row) => row.map((value) => `"${String(value ?? "").replace(/"/g, '""')}"`).join(","))
+    .join("\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `painel-financeiro-${new Date().toISOString().slice(0, 10)}.csv`;
+  link.click();
+  URL.revokeObjectURL(url);
 }
 
 function setMessage(text, isError = false) {
@@ -1198,7 +740,7 @@ function setLoading(isLoading) {
 }
 
 function setCountdownText(value) {
-  getElement("refreshCountdown").textContent = `Proxima atualizacao em ${value}s`;
+  setText("refreshCountdown", `Proxima atualizacao em ${value}s`);
 }
 
 function startCountdown() {
@@ -1209,10 +751,7 @@ function startCountdown() {
   state.countdownTimer = setInterval(() => {
     state.countdownRemaining -= 1;
     setCountdownText(Math.max(state.countdownRemaining, 0));
-    if (state.countdownRemaining <= 0) {
-      clearInterval(state.countdownTimer);
-      state.countdownTimer = null;
-    }
+    if (state.countdownRemaining <= 0) clearInterval(state.countdownTimer);
   }, 1000);
 }
 
@@ -1225,15 +764,13 @@ async function refreshData() {
     const rows = parseCsv(csvText);
     const items = normalizeRows(rows);
 
-    if (!items.length) {
-      throw new Error("A planilha carregou, mas nao encontrei registros validos.");
-    }
+    if (!items.length) throw new Error("A planilha carregou, mas nao encontrei registros validos.");
 
     state.items = items;
-    updateFilters(items);
+    updateMonthFilters(items);
     renderDashboard();
 
-    getElement("lastUpdate").textContent = `Ultima atualizacao: ${new Date().toLocaleString("pt-BR")}`;
+    setText("lastUpdate", `Ultima atualizacao: ${new Date().toLocaleString("pt-BR")}`);
     setMessage(`Planilha sincronizada com ${numberFormatter.format(items.length)} registro(s).`);
     startCountdown();
   } catch (error) {
@@ -1248,55 +785,22 @@ function startAutoRefresh() {
   state.autoRefreshTimer = setInterval(refreshData, AUTO_REFRESH_SECONDS * 1000);
 }
 
-function exportCurrentData() {
-  const items = getFilteredItems();
-  const accountsMode = isAccountsMode(items);
-  const headers = accountsMode
-    ? ["Data", "Descricao", "Classe", "Status", "Valor", "Pago", "Pendente"]
-    : ["Data", "Descricao", "Tipo", "Categoria", "Fonte", "Status", "Receita", "Despesa", "Lucro"];
-  const rows = items.map((item) => {
-    if (accountsMode) {
-      return [
-        item.date ? item.date.toLocaleDateString("pt-BR") : "",
-        item.description,
-        item.typeLabel,
-        item.status,
-        item.amount,
-        item.status === "Liquidado" ? item.amount : 0,
-        item.status !== "Liquidado" ? item.amount : 0,
-      ];
-    }
-
-    return [
-      item.date ? item.date.toLocaleDateString("pt-BR") : "",
-      item.description,
-      item.typeLabel,
-      item.category,
-      item.source,
-      item.status,
-      item.receita,
-      item.despesa,
-      item.lucro,
-    ];
+function bindNavigation() {
+  document.querySelectorAll(".nav-tabs button").forEach((button) => {
+    button.addEventListener("click", () => {
+      const target = getElement(button.dataset.target);
+      if (target) target.scrollIntoView({ behavior: "smooth", block: "start" });
+      document.querySelectorAll(".nav-tabs button").forEach((item) => item.classList.remove("active"));
+      button.classList.add("active");
+    });
   });
-
-  const csv = [headers, ...rows]
-    .map((row) => row.map((value) => `"${String(value ?? "").replace(/"/g, '""')}"`).join(","))
-    .join("\n");
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = `painel-financeiro-${new Date().toISOString().slice(0, 10)}.csv`;
-  link.click();
-  URL.revokeObjectURL(url);
 }
 
 function bindEvents() {
   getElement("refreshButton").addEventListener("click", refreshData);
   getElement("exportButton").addEventListener("click", exportCurrentData);
   getElement("periodFilter").addEventListener("change", renderDashboard);
-  getElement("dailyMonthFilter").addEventListener("change", renderDashboard);
+  bindNavigation();
 }
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -1310,7 +814,5 @@ document.addEventListener("DOMContentLoaded", () => {
   refreshData();
   startAutoRefresh();
 
-  if (window.lucide) {
-    window.lucide.createIcons();
-  }
+  if (window.lucide) window.lucide.createIcons();
 });
