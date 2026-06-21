@@ -132,7 +132,7 @@ function parseDate(value) {
 
 function monthInfoFromDate(date) {
   if (!isValidDate(date)) {
-    return { key: "sem-mes", label: "Sem mes", sort: 999999 };
+    return { key: "sem-mes", label: "Sem mes", displayLabel: "Sem mes", sort: 999999 };
   }
 
   const year = date.getFullYear();
@@ -143,6 +143,33 @@ function monthInfoFromDate(date) {
     displayLabel: `${monthCatalog[month].label} ${year}`,
     sort: year * 12 + month,
   };
+}
+
+function monthInfoFromText(value, fallbackYear = new Date().getFullYear()) {
+  const parsedDate = parseDate(value);
+  if (parsedDate) return monthInfoFromDate(parsedDate);
+
+  const text = normalizeText(value);
+  if (!text) return null;
+
+  const yearMatch = text.match(/(19\d{2}|20\d{2})/);
+  const year = yearMatch ? Number(yearMatch[1]) : fallbackYear;
+  const found = monthCatalog.find((month) =>
+    month.aliases.some((alias) => text === alias || text.includes(alias))
+  );
+
+  if (!found) return null;
+
+  return {
+    key: `${year}-${String(found.index + 1).padStart(2, "0")}`,
+    label: `${found.label}/${year}`,
+    displayLabel: `${found.label} ${year}`,
+    sort: year * 12 + found.index,
+  };
+}
+
+function resolveMonthInfo(date, monthText) {
+  return monthInfoFromText(monthText) || monthInfoFromDate(date);
 }
 
 function buildStatus(value) {
@@ -180,13 +207,16 @@ function normalizeRows(rows) {
   const typeKey = findKey(keys, ["tipo", "natureza", "movimento"]);
   const categoryKey = findKey(keys, ["categoria", "category", "grupo", "segmento"]);
   const sourceKey = findKey(keys, ["fonte", "origem", "conta", "banco", "fornecedor"]);
+  const sheetKey = findKey(keys, ["aba", "sheet", "planilha"]);
+  const monthKey = findKey(keys, ["mes", "competencia", "periodo"]);
   const revenueKey = findKey(keys, ["receita", "faturamento", "entrada"]);
   const expenseKey = findKey(keys, ["despesa", "custo", "saida"]);
   const simpleAccountMode = Boolean(amountKey && !typeKey && !revenueKey && !expenseKey);
 
   return rows.flatMap((row, rowIndex) => {
     const date = dateKey ? parseDate(row[dateKey]) : null;
-    const monthInfo = monthInfoFromDate(date);
+    const monthText = monthKey ? row[monthKey] : sheetKey ? row[sheetKey] : "";
+    const monthInfo = resolveMonthInfo(date, monthText);
     const description = String(descKey ? row[descKey] : `Registro ${rowIndex + 1}`).trim() || `Registro ${rowIndex + 1}`;
     const category = String(categoryKey ? row[categoryKey] : "Contas").trim() || "Contas";
     const source = String(sourceKey ? row[sourceKey] : category).trim() || category;
@@ -362,6 +392,16 @@ function monthKeyFromParts(year, monthIndex) {
 function yearFromMonthKey(monthKey) {
   const year = Number(String(monthKey).slice(0, 4));
   return Number.isFinite(year) && year > 0 ? year : new Date().getFullYear();
+}
+
+function monthKeyParts(monthKey) {
+  const match = String(monthKey).match(/^(\d{4})-(\d{2})$/);
+  if (!match) return null;
+
+  const year = Number(match[1]);
+  const monthIndex = Number(match[2]) - 1;
+  if (!Number.isFinite(year) || monthIndex < 0 || monthIndex > 11) return null;
+  return { year, monthIndex };
 }
 
 function resolveChartYear(items) {
@@ -697,8 +737,13 @@ function buildMonthlyAccumulatedRows(items, accountsMode) {
 
 function buildDailyAccumulatedRows(items, accountsMode) {
   const datedItems = items.filter((item) => isValidDate(item.date));
+  const selectedParts = monthKeyParts(getElement("periodFilter").value);
   const lastDate = datedItems.reduce((latest, item) => (latest && latest > item.date ? latest : item.date), null);
-  const daysInMonth = lastDate ? new Date(lastDate.getFullYear(), lastDate.getMonth() + 1, 0).getDate() : 31;
+  const daysInMonth = selectedParts
+    ? new Date(selectedParts.year, selectedParts.monthIndex + 1, 0).getDate()
+    : lastDate
+      ? new Date(lastDate.getFullYear(), lastDate.getMonth() + 1, 0).getDate()
+      : 31;
   const rows = Array.from({ length: daysInMonth }, (_, index) => ({
     label: String(index + 1).padStart(2, "0"),
     first: 0,

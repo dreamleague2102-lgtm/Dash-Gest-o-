@@ -43,6 +43,22 @@ Status como `Pago`, `Liquidado`, `Pendente`, `Recebido`, `Quitado` e semelhantes
 
 Se a planilha tiver apenas `Descricao`, `Valor`, `Data` e `Status`, o dashboard entra em modo `Conta`: os cards e graficos mostram valor total, contas pagas, pendentes e em aberto.
 
+## Abas mensais
+
+Por padrao, a API junta as abas:
+
+```text
+Janeiro, Fevereiro, Março, Abril, Maio, Junho, Julho
+```
+
+O nome da aba tambem vira referencia de mes. Isso evita problema quando uma aba nova e criada copiando datas de outro mes.
+
+Se criar mais abas depois, adicione no Vercel a variavel:
+
+```text
+SHEET_NAMES=Janeiro,Fevereiro,Março,Abril,Maio,Junho,Julho,Agosto,Setembro,Outubro,Novembro,Dezembro
+```
+
 ## Deploy no Vercel
 
 1. Envie estes arquivos para o repositorio do GitHub.
