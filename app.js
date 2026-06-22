@@ -451,8 +451,6 @@ function updateMonthFilters(items) {
     periodFilter.value = "all";
   }
 
-  const currentYear = getElement("currentYear");
-  if (currentYear) currentYear.textContent = String(new Date().getFullYear());
 }
 
 function getFilteredItems() {
