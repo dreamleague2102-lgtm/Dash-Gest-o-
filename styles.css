@@ -72,17 +72,12 @@ svg {
   text-decoration: none;
 }
 
-.brand-mark {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+.brand-logo {
+  display: block;
   width: 46px;
   height: 46px;
-  border-radius: 999px;
-  background: var(--income);
-  color: #06120d;
-  font-size: 1.28rem;
-  font-weight: 900;
+  flex: 0 0 auto;
+  border-radius: 14px;
 }
 
 .brand strong {

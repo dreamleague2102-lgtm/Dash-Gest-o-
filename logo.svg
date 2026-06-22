@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="logo-title">
+  <title id="logo-title">Painel Financeiro</title>
+  <defs>
+    <linearGradient id="logo-bg" x1="14" y1="10" x2="52" y2="56" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#55e3a3"/>
+      <stop offset="1" stop-color="#32c987"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="18" fill="#0a1117"/>
+  <circle cx="32" cy="32" r="24" fill="url(#logo-bg)"/>
+  <path d="M21 43h22v4H21zM21 36h6v7h-6zM30 29h6v14h-6zM39 22h6v21h-6z" fill="#06120d" opacity=".22"/>
+  <text x="32" y="40" text-anchor="middle" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="28" font-weight="900" fill="#06120d">B</text>
+</svg>
