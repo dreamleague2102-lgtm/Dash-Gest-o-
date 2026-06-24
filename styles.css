@@ -257,6 +257,10 @@ svg {
 
 .account-detail-panel {
   min-height: 330px;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 8% 0%, rgba(72, 213, 151, 0.07), transparent 28%),
+    var(--panel);
 }
 
 .account-total-badge {
@@ -270,102 +274,144 @@ svg {
   font-size: 0.8rem;
 }
 
-.account-analysis-layout {
+.forecast-analysis-layout {
   display: grid;
-  grid-template-columns: minmax(220px, 0.8fr) minmax(0, 1.5fr);
-  gap: 30px;
-  align-items: center;
+  grid-template-columns: minmax(0, 1.25fr) minmax(300px, 0.9fr);
+  gap: 20px;
+  align-items: stretch;
 }
 
-.account-donut-wrap {
+.forecast-chart-wrap {
   position: relative;
-  width: min(250px, 100%);
-  height: 250px;
-  margin: 0 auto;
+  min-height: 310px;
+  padding: 16px 16px 10px;
+  border: 1px solid var(--border-soft);
+  border-radius: 16px;
+  background: linear-gradient(180deg, rgba(32, 42, 53, 0.72), rgba(19, 26, 34, 0.34));
 }
 
-.account-donut-center {
-  position: absolute;
-  inset: 50% auto auto 50%;
+.forecast-chart-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+  margin-bottom: 8px;
+}
+
+.forecast-chart-heading div {
   display: grid;
-  justify-items: center;
-  transform: translate(-50%, -50%);
-  pointer-events: none;
+  gap: 2px;
 }
 
-.account-donut-center strong {
-  color: var(--text);
-  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
-  font-size: 1.55rem;
-}
-
-.account-donut-center span {
+.forecast-chart-heading span {
   color: var(--muted);
-  font-size: 0.75rem;
+  font-size: 0.7rem;
+  font-weight: 800;
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
 
-.account-calculations {
-  display: grid;
-  gap: 12px;
+.forecast-chart-heading strong {
+  color: var(--text);
+  font-size: 0.95rem;
 }
 
-.calculation-row {
-  padding: 14px 16px;
+.forecast-chart-note {
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: rgba(10, 17, 23, 0.45);
+}
+
+.forecast-chart-wrap canvas {
+  height: 245px !important;
+}
+
+.forecast-calculations {
+  display: grid;
+  gap: 14px;
+}
+
+.forecast-card {
+  display: grid;
+  align-content: space-between;
+  gap: 14px;
+  min-height: 132px;
+  padding: 16px;
   border: 1px solid var(--border-soft);
   border-radius: 14px;
   background: var(--panel-soft);
+  transition:
+    border-color 0.2s ease,
+    transform 0.2s ease;
 }
 
-.calculation-heading {
+.forecast-card:hover {
+  border-color: #344557;
+  transform: translateY(-1px);
+}
+
+.forecast-card.negative {
+  border-color: rgba(255, 79, 94, 0.35);
+}
+
+.forecast-card-header {
   display: flex;
   justify-content: space-between;
   gap: 16px;
-  color: #a8bdd9;
+  align-items: flex-start;
 }
 
-.calculation-heading strong {
+.forecast-card-header div {
+  display: grid;
+  gap: 2px;
+}
+
+.forecast-card-header span {
+  color: var(--muted);
+  font-size: 0.72rem;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.forecast-card-header div strong {
   color: var(--text);
+  font-size: 1.05rem;
+}
+
+.forecast-balance {
+  color: var(--income);
   font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 1.35rem;
 }
 
-.percentage-track {
-  height: 7px;
-  margin: 10px 0;
-  overflow: hidden;
-  border-radius: 999px;
-  background: var(--panel-strong);
+.forecast-card.negative .forecast-balance {
+  color: var(--expense);
 }
 
-.percentage-track span {
-  display: block;
-  width: 0;
-  height: 100%;
-  border-radius: inherit;
-  transition: width 0.45s ease;
+.forecast-values {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
 }
 
-.calculation-row.paid .percentage-track span {
-  background: var(--income);
+.forecast-values span {
+  display: grid;
+  gap: 3px;
+  color: var(--muted);
+  font-size: 0.75rem;
 }
 
-.calculation-row.pending .percentage-track span {
-  background: var(--warning);
+.forecast-values strong {
+  color: var(--muted-strong);
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 0.9rem;
 }
 
-.calculation-row.late .percentage-track span {
-  background: var(--expense);
-}
-
-.calculation-row p {
+.forecast-card p {
   margin: 0;
   color: var(--muted);
   font-size: 0.82rem;
-}
-
-.calculation-row p strong {
-  color: var(--muted-strong);
 }
 
 .metric-card,
@@ -760,7 +806,7 @@ svg {
     grid-template-columns: 1fr;
   }
 
-  .account-analysis-layout {
+  .forecast-analysis-layout {
     grid-template-columns: 1fr;
   }
 

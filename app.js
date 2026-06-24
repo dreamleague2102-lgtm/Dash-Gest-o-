@@ -1,10 +1,12 @@
 const SHEET_ID = "18TbxyCQ-bdEp8vs2bsxqo9zRZ-mritYvLa7Twwpsa1U";
 const SHEET_GID = "433514608";
 const DIRECT_CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&gid=${SHEET_GID}`;
+const VALUES_CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Valores`;
 const AUTO_REFRESH_SECONDS = 60;
 
 const state = {
   items: [],
+  forecastRows: [],
   charts: {},
   countdownTimer: null,
   autoRefreshTimer: null,
@@ -291,6 +293,29 @@ async function loadCsvText() {
   throw lastError || new Error("Nao foi possivel carregar a planilha.");
 }
 
+async function loadValuesCsvText() {
+  const urls = [];
+  if (window.location.protocol !== "file:") {
+    urls.push(new URL("/api/values", window.location.origin).toString());
+  }
+  urls.push(VALUES_CSV_URL);
+
+  let lastError = null;
+  for (const url of urls) {
+    try {
+      const response = await fetch(withCacheBuster(url), { cache: "no-store" });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const text = await response.text();
+      if (!text.trim() || text.trim().startsWith("<")) throw new Error("A resposta nao parece ser CSV.");
+      return text;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  throw lastError || new Error("Nao foi possivel carregar a aba Valores.");
+}
+
 function parseCsv(text) {
   const result = Papa.parse(text, {
     header: true,
@@ -303,6 +328,37 @@ function parseCsv(text) {
   }
 
   return result.data.filter((row) => Object.values(row).some((value) => String(value ?? "").trim()));
+}
+
+function normalizeForecastRows(rows) {
+  if (!rows.length) return [];
+
+  const keys = Object.keys(rows[0]).filter(Boolean);
+  const dateKey = findKey(keys, ["data", "date"]);
+  const incomeKey = findKey(keys, ["valores", "valor", "receita", "entrada", "recebimento"]);
+  const expenseKey = findKey(keys, ["despesas", "despesa", "saida", "contas"]);
+  const balanceKey = findKey(keys, ["saldo", "balance"]);
+
+  if (!dateKey || !incomeKey || !expenseKey) return [];
+
+  return rows.flatMap((row) => {
+    const date = parseDate(row[dateKey]);
+    if (!date) return [];
+
+    const income = Math.abs(parseAmount(row[incomeKey]));
+    const expense = Math.abs(parseAmount(row[expenseKey]));
+    const parsedBalance = balanceKey ? parseAmount(row[balanceKey]) : income - expense;
+    const monthInfo = monthInfoFromDate(date);
+
+    return [{
+      date,
+      income,
+      expense,
+      balance: parsedBalance,
+      monthKey: monthInfo.key,
+      monthLabel: monthInfo.displayLabel,
+    }];
+  });
 }
 
 function isAccountsMode(items) {
@@ -560,72 +616,172 @@ function renderDashboard() {
 }
 
 function renderOverviewChart(items) {
-  const totals = calculateTotals(items);
-  const paidPct = totals.count ? (totals.liquidado / totals.count) * 100 : 0;
-  const pendingPct = totals.count ? (totals.pendente / totals.count) * 100 : 0;
-  const latePct = totals.count ? (totals.atrasado / totals.count) * 100 : 0;
+  const selectedMonth = getElement("periodFilter").value;
+  const availableRows = [...state.forecastRows].sort((a, b) => a.date - b.date);
+  const latestMonthKey = availableRows.at(-1)?.monthKey;
+  const forecastMonthKey = selectedMonth === "all" ? latestMonthKey : selectedMonth;
+  const selectedRows = availableRows.filter((row) => row.monthKey === forecastMonthKey);
+  const row15 = selectedRows.find((row) => row.date.getDate() <= 15) || null;
+  const row30 = [...selectedRows].reverse().find((row) => row.date.getDate() > 15) || null;
+  const totalIncome15 = row15?.income || 0;
+  const totalExpense15 = row15?.expense || 0;
+  const balance15 = row15?.balance ?? totalIncome15 - totalExpense15;
+  const totalIncome30 = row30?.income || 0;
+  const totalExpense30 = row30?.expense || 0;
+  const balance30 = row30?.balance ?? totalIncome30 - totalExpense30;
 
   setText(
     "overviewChartStats",
-    getElement("periodFilter").value === "all"
-      ? "Percentuais considerando todos os meses"
-      : `Percentuais de ${getSelectedMonthLabel()}`
+    selectedRows.length
+      ? `Recebimentos menos despesas de ${selectedRows[0].monthLabel}`
+      : "Nenhum valor encontrado na aba Valores para este periodo"
   );
-  setText("overviewTotalCount", `${numberFormatter.format(totals.count)} contas`);
-  setText("overviewPaidCenter", formatPercent(paidPct));
-  setText("overviewPaidPct", formatPercent(paidPct));
-  setText("overviewPendingPct", formatPercent(pendingPct));
-  setText("overviewLatePct", formatPercent(latePct));
-  setText("overviewPaidAmount", formatCurrencyCompact(totals.paidAmount));
-  setText("overviewPendingAmount", formatCurrencyCompact(totals.pendingAmount));
-  setText("overviewLateAmount", formatCurrencyCompact(totals.lateAmount));
+  setText("overviewMonthBadge", selectedRows[0]?.monthLabel || getSelectedMonthLabel());
+  setText("forecastIncomeTotal15", formatCurrencyCompact(totalIncome15));
+  setText("forecastExpense15", formatCurrencyCompact(totalExpense15));
+  setText("forecastBalance15", formatCurrencyCompact(balance15));
+  setText("forecastIncomeTotal30", formatCurrencyCompact(totalIncome30));
+  setText("forecastExpense30", formatCurrencyCompact(totalExpense30));
+  setText("forecastBalance30", formatCurrencyCompact(balance30));
   setText(
-    "overviewPaidFormula",
-    `${numberFormatter.format(totals.liquidado)} ÷ ${numberFormatter.format(totals.count)} × 100 = ${formatPercent(paidPct)}`
-  );
-  setText(
-    "overviewPendingFormula",
-    `${numberFormatter.format(totals.pendente)} ÷ ${numberFormatter.format(totals.count)} × 100 = ${formatPercent(pendingPct)}`
+    "forecastFormula15",
+    `${formatCurrencyCompact(totalIncome15)} - ${formatCurrencyCompact(totalExpense15)} = ${formatCurrencyCompact(balance15)}`
   );
   setText(
-    "overviewLateFormula",
-    `${numberFormatter.format(totals.atrasado)} ÷ ${numberFormatter.format(totals.count)} × 100 = ${formatPercent(latePct)}`
+    "forecastFormula30",
+    `${formatCurrencyCompact(totalIncome30)} - ${formatCurrencyCompact(totalExpense30)} = ${formatCurrencyCompact(balance30)}`
   );
-
-  getElement("overviewPaidBar").style.width = `${Math.min(paidPct, 100)}%`;
-  getElement("overviewPendingBar").style.width = `${Math.min(pendingPct, 100)}%`;
-  getElement("overviewLateBar").style.width = `${Math.min(latePct, 100)}%`;
+  getElement("forecastCard15").classList.toggle("negative", balance15 < 0);
+  getElement("forecastCard30").classList.toggle("negative", balance30 < 0);
 
   destroyChart("overview");
-  state.charts.overview = new Chart(getElement("overviewChart"), {
-    type: "doughnut",
+  const overviewCanvas = getElement("overviewChart");
+  const overviewContext = overviewCanvas.getContext("2d");
+  const incomeGradient = overviewContext.createLinearGradient(0, 0, 0, 250);
+  incomeGradient.addColorStop(0, "rgba(72, 213, 151, 0.95)");
+  incomeGradient.addColorStop(1, "rgba(72, 213, 151, 0.45)");
+  const expenseGradient = overviewContext.createLinearGradient(0, 0, 0, 250);
+  expenseGradient.addColorStop(0, "rgba(255, 182, 50, 0.95)");
+  expenseGradient.addColorStop(1, "rgba(255, 182, 50, 0.42)");
+
+  state.charts.overview = new Chart(overviewCanvas, {
+    type: "bar",
     data: {
-      labels: ["Pagas", "Pendentes", "Atrasadas"],
+      labels: ["Dia 15", "Dia 30"],
       datasets: [
         {
-          data: [totals.liquidado, totals.pendente, totals.atrasado],
-          backgroundColor: ["#48d597", "#ffb632", "#ff4f5e"],
-          borderColor: "#131a22",
-          borderWidth: 5,
-          hoverOffset: 5,
+          label: "Entradas",
+          data: [totalIncome15, totalIncome30],
+          backgroundColor: incomeGradient,
+          borderColor: "#48d597",
+          borderWidth: 1,
+          borderRadius: 8,
+          borderSkipped: false,
+          maxBarThickness: 44,
+          categoryPercentage: 0.72,
+          barPercentage: 0.78,
+        },
+        {
+          label: "Despesas",
+          data: [totalExpense15, totalExpense30],
+          backgroundColor: expenseGradient,
+          borderColor: "#ffb632",
+          borderWidth: 1,
+          borderRadius: 8,
+          borderSkipped: false,
+          maxBarThickness: 44,
+          categoryPercentage: 0.72,
+          barPercentage: 0.78,
+        },
+        {
+          type: "line",
+          label: "Saldo",
+          data: [balance15, balance30],
+          borderColor: "#00b8ff",
+          backgroundColor: "#00b8ff",
+          pointBackgroundColor: [
+            balance15 < 0 ? "#ff4f5e" : "#00b8ff",
+            balance30 < 0 ? "#ff4f5e" : "#00b8ff",
+          ],
+          pointBorderColor: "#131a22",
+          pointBorderWidth: 3,
+          pointRadius: 6,
+          pointHoverRadius: 8,
+          borderWidth: 3,
+          tension: 0.28,
+          fill: false,
+          order: 0,
         },
       ],
     },
     options: {
       responsive: true,
       maintainAspectRatio: false,
-      cutout: "68%",
+      interaction: { mode: "index", intersect: false },
+      layout: { padding: { top: 6, right: 8, bottom: 0, left: 2 } },
       plugins: {
-        legend: { display: false },
+        legend: {
+          display: true,
+          position: "top",
+          align: "end",
+          labels: {
+            color: "#a8bdd9",
+            usePointStyle: true,
+            pointStyle: "circle",
+            boxWidth: 8,
+            boxHeight: 8,
+            padding: 16,
+            font: { size: 11, weight: "600" },
+          },
+        },
         tooltip: {
+          backgroundColor: "#0c141b",
+          titleColor: "#f4f7fb",
+          bodyColor: "#c8d5e5",
+          borderColor: "#314152",
+          borderWidth: 1,
+          padding: 12,
+          displayColors: true,
+          usePointStyle: true,
           callbacks: {
-            label: (context) => {
-              const pct = totals.count ? (context.parsed / totals.count) * 100 : 0;
-              return `${context.label}: ${numberFormatter.format(context.parsed)} (${formatPercent(pct)})`;
+            label: (context) => `${context.dataset.label}: ${formatCurrency(context.parsed.y)}`,
+            footer: (items) => {
+              const index = items[0]?.dataIndex ?? 0;
+              const balances = [balance15, balance30];
+              return `Resultado: ${balances[index] >= 0 ? "saldo positivo" : "saldo negativo"}`;
             },
           },
         },
       },
+      scales: {
+        y: {
+          beginAtZero: true,
+          grace: "12%",
+          ticks: {
+            color: "#8295aa",
+            maxTicksLimit: 5,
+            padding: 8,
+            callback: (value) => formatAxisCurrency(value),
+          },
+          grid: {
+            color: (context) => context.tick.value === 0
+              ? "rgba(244, 247, 251, 0.25)"
+              : "rgba(154, 180, 213, 0.09)",
+            lineWidth: (context) => context.tick.value === 0 ? 1.5 : 1,
+          },
+          border: { display: false },
+        },
+        x: {
+          ticks: {
+            color: "#c2ccda",
+            padding: 8,
+            font: { size: 12, weight: "700" },
+          },
+          grid: { display: false },
+          border: { display: false },
+        },
+      },
+      animation: { duration: 650, easing: "easeOutQuart" },
     },
   });
 }
@@ -934,13 +1090,18 @@ async function refreshData() {
     setLoading(true);
     setMessage("Carregando planilha...");
 
-    const csvText = await loadCsvText();
+    const [csvText, valuesCsvText] = await Promise.all([
+      loadCsvText(),
+      loadValuesCsvText().catch(() => ""),
+    ]);
     const rows = parseCsv(csvText);
     const items = normalizeRows(rows);
+    const valuesRows = valuesCsvText ? parseCsv(valuesCsvText) : [];
 
     if (!items.length) throw new Error("A planilha carregou, mas nao encontrei registros validos.");
 
     state.items = items;
+    state.forecastRows = normalizeForecastRows(valuesRows);
     updateMonthFilters(items);
     renderDashboard();
 

@@ -74,50 +74,56 @@
         </article>
       </section>
 
-      <section id="overview" class="panel panel-wide dashboard-view account-detail-panel" role="tabpanel" aria-label="Detalhamento das contas">
+      <section id="overview" class="panel panel-wide dashboard-view account-detail-panel" role="tabpanel" aria-label="Previsao de saldo do mes">
         <div class="panel-header">
           <div>
-            <h2>Detalhamento das contas</h2>
-            <p id="overviewChartStats">Percentuais do periodo selecionado</p>
+            <h2>Previsao de saldo do mes</h2>
+            <p id="overviewChartStats">Recebimentos menos despesas da aba Valores</p>
           </div>
-          <strong id="overviewTotalCount" class="account-total-badge">-- contas</strong>
+          <strong id="overviewMonthBadge" class="account-total-badge">--</strong>
         </div>
 
-        <div class="account-analysis-layout">
-          <div class="account-donut-wrap">
-            <canvas id="overviewChart"></canvas>
-            <div class="account-donut-center" aria-hidden="true">
-              <strong id="overviewPaidCenter">--</strong>
-              <span>pagas</span>
+        <div class="forecast-analysis-layout">
+          <div class="forecast-chart-wrap">
+            <div class="forecast-chart-heading">
+              <div>
+                <span>Fluxo projetado</span>
+                <strong>Recebimentos, despesas e saldo</strong>
+              </div>
+              <span class="forecast-chart-note">Valores em R$</span>
             </div>
+            <canvas id="overviewChart"></canvas>
           </div>
 
-          <div class="account-calculations">
-            <article class="calculation-row paid">
-              <div class="calculation-heading">
-                <span><i class="dot income"></i>Pagas</span>
-                <strong id="overviewPaidPct">--</strong>
+          <div class="forecast-calculations">
+            <article id="forecastCard15" class="forecast-card">
+              <div class="forecast-card-header">
+                <div>
+                  <span>Saldo previsto</span>
+                  <strong>Dia 15</strong>
+                </div>
+                <strong id="forecastBalance15" class="forecast-balance">--</strong>
               </div>
-              <div class="percentage-track"><span id="overviewPaidBar"></span></div>
-              <p><strong id="overviewPaidAmount">--</strong> · <span id="overviewPaidFormula">--</span></p>
+              <div class="forecast-values">
+                <span>Recebimento <strong id="forecastIncomeTotal15">--</strong></span>
+                <span>Despesas <strong id="forecastExpense15">--</strong></span>
+              </div>
+              <p id="forecastFormula15">Recebimento - despesas = saldo</p>
             </article>
 
-            <article class="calculation-row pending">
-              <div class="calculation-heading">
-                <span><i class="dot warning"></i>Pendentes</span>
-                <strong id="overviewPendingPct">--</strong>
+            <article id="forecastCard30" class="forecast-card">
+              <div class="forecast-card-header">
+                <div>
+                  <span>Saldo previsto</span>
+                  <strong>Dia 30</strong>
+                </div>
+                <strong id="forecastBalance30" class="forecast-balance">--</strong>
               </div>
-              <div class="percentage-track"><span id="overviewPendingBar"></span></div>
-              <p><strong id="overviewPendingAmount">--</strong> · <span id="overviewPendingFormula">--</span></p>
-            </article>
-
-            <article class="calculation-row late">
-              <div class="calculation-heading">
-                <span><i class="dot expense"></i>Atrasadas</span>
-                <strong id="overviewLatePct">--</strong>
+              <div class="forecast-values">
+                <span>Recebimento <strong id="forecastIncomeTotal30">--</strong></span>
+                <span>Despesas <strong id="forecastExpense30">--</strong></span>
               </div>
-              <div class="percentage-track"><span id="overviewLateBar"></span></div>
-              <p><strong id="overviewLateAmount">--</strong> · <span id="overviewLateFormula">--</span></p>
+              <p id="forecastFormula30">Recebimento - despesas = saldo</p>
             </article>
           </div>
         </div>
