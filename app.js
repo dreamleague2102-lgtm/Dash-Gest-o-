@@ -621,38 +621,46 @@ function renderOverviewChart(items) {
   const latestMonthKey = availableRows.at(-1)?.monthKey;
   const forecastMonthKey = selectedMonth === "all" ? latestMonthKey : selectedMonth;
   const selectedRows = availableRows.filter((row) => row.monthKey === forecastMonthKey);
-  const row15 = selectedRows.find((row) => row.date.getDate() <= 15) || null;
-  const row30 = [...selectedRows].reverse().find((row) => row.date.getDate() > 15) || null;
-  const totalIncome15 = row15?.income || 0;
-  const totalExpense15 = row15?.expense || 0;
-  const balance15 = row15?.balance ?? totalIncome15 - totalExpense15;
-  const totalIncome30 = row30?.income || 0;
-  const totalExpense30 = row30?.expense || 0;
-  const balance30 = row30?.balance ?? totalIncome30 - totalExpense30;
+  const today = new Date();
+  today.setHours(23, 59, 59, 999);
+  const rowsUntilToday = selectedRows.filter((row) => row.date <= today);
+  const currentRow = rowsUntilToday.at(-1) || selectedRows[0] || null;
+  const futureRows = currentRow
+    ? selectedRows.filter((row) => row.date > currentRow.date)
+    : [];
+  const nextRow = futureRows[0] || null;
+  const currentBalance = currentRow?.balance || 0;
+  const nextIncome = nextRow?.income || 0;
+  const nextExpense = nextRow?.expense || 0;
+  const projectedBalance = currentBalance + nextIncome - nextExpense;
+  const currentLabel = currentRow ? `Dia ${currentRow.date.getDate()}` : "Saldo atual";
+  const nextLabel = nextRow ? `Dia ${nextRow.date.getDate()}` : "Projecao";
 
   setText(
     "overviewChartStats",
     selectedRows.length
-      ? `Recebimentos menos despesas de ${selectedRows[0].monthLabel}`
+      ? `Saldo atual mais os proximos movimentos de ${selectedRows[0].monthLabel}`
       : "Nenhum valor encontrado na aba Valores para este periodo"
   );
   setText("overviewMonthBadge", selectedRows[0]?.monthLabel || getSelectedMonthLabel());
-  setText("forecastIncomeTotal15", formatCurrencyCompact(totalIncome15));
-  setText("forecastExpense15", formatCurrencyCompact(totalExpense15));
-  setText("forecastBalance15", formatCurrencyCompact(balance15));
-  setText("forecastIncomeTotal30", formatCurrencyCompact(totalIncome30));
-  setText("forecastExpense30", formatCurrencyCompact(totalExpense30));
-  setText("forecastBalance30", formatCurrencyCompact(balance30));
+  setText("forecastDate15", currentLabel);
+  setText("forecastDate30", nextLabel);
+  setText("forecastIncomeTotal15", formatCurrencyCompact(currentBalance));
+  setText("forecastExpense15", "Ja descontadas");
+  setText("forecastBalance15", formatCurrencyCompact(currentBalance));
+  setText("forecastIncomeTotal30", formatCurrencyCompact(nextIncome));
+  setText("forecastExpense30", formatCurrencyCompact(nextExpense));
+  setText("forecastBalance30", formatCurrencyCompact(projectedBalance));
   setText(
     "forecastFormula15",
-    `${formatCurrencyCompact(totalIncome15)} - ${formatCurrencyCompact(totalExpense15)} = ${formatCurrencyCompact(balance15)}`
+    `${formatCurrencyCompact(currentBalance)} e o saldo liquido atual; as contas pagas nao sao descontadas novamente.`
   );
   setText(
     "forecastFormula30",
-    `${formatCurrencyCompact(totalIncome30)} - ${formatCurrencyCompact(totalExpense30)} = ${formatCurrencyCompact(balance30)}`
+    `${formatCurrencyCompact(currentBalance)} + ${formatCurrencyCompact(nextIncome)} - ${formatCurrencyCompact(nextExpense)} = ${formatCurrencyCompact(projectedBalance)}`
   );
-  getElement("forecastCard15").classList.toggle("negative", balance15 < 0);
-  getElement("forecastCard30").classList.toggle("negative", balance30 < 0);
+  getElement("forecastCard15").classList.toggle("negative", currentBalance < 0);
+  getElement("forecastCard30").classList.toggle("negative", projectedBalance < 0);
 
   destroyChart("overview");
   const overviewCanvas = getElement("overviewChart");
@@ -667,11 +675,11 @@ function renderOverviewChart(items) {
   state.charts.overview = new Chart(overviewCanvas, {
     type: "bar",
     data: {
-      labels: ["Dia 15", "Dia 30"],
+      labels: [currentLabel, nextLabel],
       datasets: [
         {
-          label: "Entradas",
-          data: [totalIncome15, totalIncome30],
+          label: "Proximas entradas",
+          data: [0, nextIncome],
           backgroundColor: incomeGradient,
           borderColor: "#48d597",
           borderWidth: 1,
@@ -682,8 +690,8 @@ function renderOverviewChart(items) {
           barPercentage: 0.78,
         },
         {
-          label: "Despesas",
-          data: [totalExpense15, totalExpense30],
+          label: "Proximas despesas",
+          data: [0, nextExpense],
           backgroundColor: expenseGradient,
           borderColor: "#ffb632",
           borderWidth: 1,
@@ -695,13 +703,13 @@ function renderOverviewChart(items) {
         },
         {
           type: "line",
-          label: "Saldo",
-          data: [balance15, balance30],
+          label: "Saldo acumulado",
+          data: [currentBalance, projectedBalance],
           borderColor: "#00b8ff",
           backgroundColor: "#00b8ff",
           pointBackgroundColor: [
-            balance15 < 0 ? "#ff4f5e" : "#00b8ff",
-            balance30 < 0 ? "#ff4f5e" : "#00b8ff",
+            currentBalance < 0 ? "#ff4f5e" : "#00b8ff",
+            projectedBalance < 0 ? "#ff4f5e" : "#00b8ff",
           ],
           pointBorderColor: "#131a22",
           pointBorderWidth: 3,
@@ -747,7 +755,7 @@ function renderOverviewChart(items) {
             label: (context) => `${context.dataset.label}: ${formatCurrency(context.parsed.y)}`,
             footer: (items) => {
               const index = items[0]?.dataIndex ?? 0;
-              const balances = [balance15, balance30];
+              const balances = [currentBalance, projectedBalance];
               return `Resultado: ${balances[index] >= 0 ? "saldo positivo" : "saldo negativo"}`;
             },
           },
