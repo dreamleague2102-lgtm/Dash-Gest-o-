@@ -204,19 +204,22 @@ svg {
 
 .dashboard-layout {
   display: grid;
-  grid-template-columns: minmax(0, 980px) 240px;
+  grid-template-columns: 240px minmax(0, 980px);
   justify-content: center;
   gap: 20px;
   align-items: start;
 }
 
 .dashboard-content {
+  grid-column: 2;
   min-width: 0;
 }
 
 .dashboard-sidebar {
   position: sticky;
   top: 116px;
+  grid-column: 1;
+  grid-row: 1;
   padding: 16px;
   background: var(--panel);
   border: 1px solid var(--border);
@@ -702,6 +705,7 @@ svg {
   }
 
   .dashboard-content {
+    grid-column: 1;
     grid-row: 2;
   }
 
@@ -709,6 +713,7 @@ svg {
     position: sticky;
     top: 96px;
     z-index: 8;
+    grid-column: 1;
     grid-row: 1;
     padding: 12px;
     border-radius: 14px;
