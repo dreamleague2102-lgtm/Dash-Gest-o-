@@ -22,14 +22,6 @@
         </span>
       </a>
 
-      <nav class="nav-tabs" aria-label="Navegacao principal">
-        <button type="button" class="active" data-target="overview">Visao Geral</button>
-        <button type="button" data-target="cashflow">Fluxo de Caixa</button>
-        <button type="button" data-target="performance">DRE</button>
-        <button type="button" data-target="accounts">Contas</button>
-        <button type="button" data-target="reports">Relatorios</button>
-      </nav>
-
       <div class="header-actions">
         <select id="periodFilter" aria-label="Periodo do dashboard">
           <option value="all">Todos os meses</option>
@@ -42,7 +34,9 @@
     </header>
 
     <main class="page">
-      <section id="overview" class="summary-grid" aria-label="Resumo financeiro">
+      <div class="dashboard-layout">
+        <div class="dashboard-content">
+      <section id="overview" class="summary-grid dashboard-view" role="tabpanel" aria-label="Resumo financeiro">
         <article class="metric-card">
           <div class="metric-top">
             <span id="cardTotalLabel">Receita Total</span>
@@ -80,7 +74,7 @@
         </article>
       </section>
 
-      <section id="cashflow" class="panel panel-wide">
+      <section id="cashflow" class="panel panel-wide dashboard-view" role="tabpanel" aria-label="Fluxo de caixa" hidden>
         <div class="panel-header">
           <div>
             <h2 id="monthlyTitle">Receita vs Despesa</h2>
@@ -96,7 +90,7 @@
         </div>
       </section>
 
-      <section id="accounts" class="panel panel-wide status-panel">
+      <section id="accounts" class="panel panel-wide status-panel dashboard-view" role="tabpanel" aria-label="Contas" hidden>
         <div class="panel-header">
           <div>
             <h2>Contas Pagas vs Pendentes</h2>
@@ -115,7 +109,7 @@
         </div>
       </section>
 
-      <section id="performance" class="panel panel-wide">
+      <section id="performance" class="panel panel-wide dashboard-view" role="tabpanel" aria-label="DRE" hidden>
         <div class="panel-header">
           <div>
             <h2>Desempenho do Mes</h2>
@@ -150,7 +144,7 @@
         </div>
       </section>
 
-      <section id="reports" class="panel panel-wide">
+      <section id="reports" class="panel panel-wide dashboard-view" role="tabpanel" aria-label="Relatorios" hidden>
         <div class="panel-header">
           <div>
             <h2>Transacoes</h2>
@@ -178,6 +172,29 @@
       <div class="footer-status">
         <span id="refreshCountdown">Proxima atualizacao em --</span>
         <span id="messageBox" role="status" aria-live="polite"></span>
+      </div>
+        </div>
+
+        <aside class="dashboard-sidebar" aria-label="Opcoes para visualizar os graficos">
+          <span class="sidebar-label">Visualizar graficos</span>
+          <nav class="nav-tabs" role="tablist" aria-label="Navegacao principal">
+            <button type="button" role="tab" class="active" data-target="overview" aria-controls="overview" aria-selected="true">
+              Visao Geral
+            </button>
+            <button type="button" role="tab" data-target="cashflow" aria-controls="cashflow" aria-selected="false">
+              Fluxo de Caixa
+            </button>
+            <button type="button" role="tab" data-target="performance" aria-controls="performance" aria-selected="false">
+              DRE
+            </button>
+            <button type="button" role="tab" data-target="accounts" aria-controls="accounts" aria-selected="false">
+              Contas
+            </button>
+            <button type="button" role="tab" data-target="reports" aria-controls="reports" aria-selected="false">
+              Relatorios
+            </button>
+          </nav>
+        </aside>
       </div>
     </main>
   </div>

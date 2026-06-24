@@ -891,9 +891,24 @@ function bindNavigation() {
   document.querySelectorAll(".nav-tabs button").forEach((button) => {
     button.addEventListener("click", () => {
       const target = getElement(button.dataset.target);
-      if (target) target.scrollIntoView({ behavior: "smooth", block: "start" });
-      document.querySelectorAll(".nav-tabs button").forEach((item) => item.classList.remove("active"));
+      if (!target) return;
+
+      document.querySelectorAll(".dashboard-view").forEach((view) => {
+        view.hidden = view !== target;
+      });
+
+      document.querySelectorAll(".nav-tabs button").forEach((item) => {
+        item.classList.remove("active");
+        item.setAttribute("aria-selected", "false");
+      });
+
       button.classList.add("active");
+      button.setAttribute("aria-selected", "true");
+
+      requestAnimationFrame(() => {
+        Object.values(state.charts).forEach((chart) => chart?.resize());
+        target.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
     });
   });
 }
