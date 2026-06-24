@@ -248,6 +248,123 @@ svg {
   gap: 14px;
 }
 
+.dashboard-content > .dashboard-view {
+  margin-top: 18px;
+}
+
+.account-detail-panel {
+  min-height: 330px;
+}
+
+.account-total-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: var(--panel-strong);
+  color: var(--text);
+  font-size: 0.8rem;
+}
+
+.account-analysis-layout {
+  display: grid;
+  grid-template-columns: minmax(220px, 0.8fr) minmax(0, 1.5fr);
+  gap: 30px;
+  align-items: center;
+}
+
+.account-donut-wrap {
+  position: relative;
+  width: min(250px, 100%);
+  height: 250px;
+  margin: 0 auto;
+}
+
+.account-donut-center {
+  position: absolute;
+  inset: 50% auto auto 50%;
+  display: grid;
+  justify-items: center;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+.account-donut-center strong {
+  color: var(--text);
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 1.55rem;
+}
+
+.account-donut-center span {
+  color: var(--muted);
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.account-calculations {
+  display: grid;
+  gap: 12px;
+}
+
+.calculation-row {
+  padding: 14px 16px;
+  border: 1px solid var(--border-soft);
+  border-radius: 14px;
+  background: var(--panel-soft);
+}
+
+.calculation-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  color: #a8bdd9;
+}
+
+.calculation-heading strong {
+  color: var(--text);
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+}
+
+.percentage-track {
+  height: 7px;
+  margin: 10px 0;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--panel-strong);
+}
+
+.percentage-track span {
+  display: block;
+  width: 0;
+  height: 100%;
+  border-radius: inherit;
+  transition: width 0.45s ease;
+}
+
+.calculation-row.paid .percentage-track span {
+  background: var(--income);
+}
+
+.calculation-row.pending .percentage-track span {
+  background: var(--warning);
+}
+
+.calculation-row.late .percentage-track span {
+  background: var(--expense);
+}
+
+.calculation-row p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.calculation-row p strong {
+  color: var(--muted-strong);
+}
+
 .metric-card,
 .panel,
 .daily-kpis article {
@@ -635,6 +752,10 @@ svg {
   .summary-grid,
   .daily-kpis,
   .status-list {
+    grid-template-columns: 1fr;
+  }
+
+  .account-analysis-layout {
     grid-template-columns: 1fr;
   }
 

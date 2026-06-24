@@ -552,10 +552,82 @@ function renderDashboard() {
     setText("cardBalanceChange", "atual");
   }
 
+  renderOverviewChart(items);
   renderMonthlyChart(items, accountsMode);
   renderStatusChart(items);
   renderAccumulatedChart(items, accountsMode);
   renderTable(items);
+}
+
+function renderOverviewChart(items) {
+  const totals = calculateTotals(items);
+  const paidPct = totals.count ? (totals.liquidado / totals.count) * 100 : 0;
+  const pendingPct = totals.count ? (totals.pendente / totals.count) * 100 : 0;
+  const latePct = totals.count ? (totals.atrasado / totals.count) * 100 : 0;
+
+  setText(
+    "overviewChartStats",
+    getElement("periodFilter").value === "all"
+      ? "Percentuais considerando todos os meses"
+      : `Percentuais de ${getSelectedMonthLabel()}`
+  );
+  setText("overviewTotalCount", `${numberFormatter.format(totals.count)} contas`);
+  setText("overviewPaidCenter", formatPercent(paidPct));
+  setText("overviewPaidPct", formatPercent(paidPct));
+  setText("overviewPendingPct", formatPercent(pendingPct));
+  setText("overviewLatePct", formatPercent(latePct));
+  setText("overviewPaidAmount", formatCurrencyCompact(totals.paidAmount));
+  setText("overviewPendingAmount", formatCurrencyCompact(totals.pendingAmount));
+  setText("overviewLateAmount", formatCurrencyCompact(totals.lateAmount));
+  setText(
+    "overviewPaidFormula",
+    `${numberFormatter.format(totals.liquidado)} ÷ ${numberFormatter.format(totals.count)} × 100 = ${formatPercent(paidPct)}`
+  );
+  setText(
+    "overviewPendingFormula",
+    `${numberFormatter.format(totals.pendente)} ÷ ${numberFormatter.format(totals.count)} × 100 = ${formatPercent(pendingPct)}`
+  );
+  setText(
+    "overviewLateFormula",
+    `${numberFormatter.format(totals.atrasado)} ÷ ${numberFormatter.format(totals.count)} × 100 = ${formatPercent(latePct)}`
+  );
+
+  getElement("overviewPaidBar").style.width = `${Math.min(paidPct, 100)}%`;
+  getElement("overviewPendingBar").style.width = `${Math.min(pendingPct, 100)}%`;
+  getElement("overviewLateBar").style.width = `${Math.min(latePct, 100)}%`;
+
+  destroyChart("overview");
+  state.charts.overview = new Chart(getElement("overviewChart"), {
+    type: "doughnut",
+    data: {
+      labels: ["Pagas", "Pendentes", "Atrasadas"],
+      datasets: [
+        {
+          data: [totals.liquidado, totals.pendente, totals.atrasado],
+          backgroundColor: ["#48d597", "#ffb632", "#ff4f5e"],
+          borderColor: "#131a22",
+          borderWidth: 5,
+          hoverOffset: 5,
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      cutout: "68%",
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: (context) => {
+              const pct = totals.count ? (context.parsed / totals.count) * 100 : 0;
+              return `${context.label}: ${numberFormatter.format(context.parsed)} (${formatPercent(pct)})`;
+            },
+          },
+        },
+      },
+    },
+  });
 }
 
 function renderMonthlyChart(items, accountsMode) {
@@ -907,7 +979,9 @@ function bindNavigation() {
 
       requestAnimationFrame(() => {
         Object.values(state.charts).forEach((chart) => chart?.resize());
-        target.scrollIntoView({ behavior: "smooth", block: "start" });
+        if (window.innerWidth <= 1060) {
+          target.scrollIntoView({ behavior: "smooth", block: "start" });
+        }
       });
     });
   });
