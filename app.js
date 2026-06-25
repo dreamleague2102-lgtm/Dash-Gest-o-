@@ -633,6 +633,7 @@ function renderOverviewChart(items) {
   const nextIncome = nextRow?.income || 0;
   const nextExpense = nextRow?.expense || 0;
   const projectedBalance = currentBalance + nextIncome - nextExpense;
+  const balanceAfterIncome = currentBalance + nextIncome;
   const currentLabel = currentRow ? `Dia ${currentRow.date.getDate()}` : "Saldo atual";
   const nextLabel = nextRow ? `Dia ${nextRow.date.getDate()}` : "Projecao";
 
@@ -646,7 +647,7 @@ function renderOverviewChart(items) {
   setText("forecastDate15", currentLabel);
   setText("forecastDate30", nextLabel);
   setText("forecastIncomeTotal15", formatCurrencyCompact(currentBalance));
-  setText("forecastExpense15", "Ja descontadas");
+  setText("forecastExpense15", "Contas descontadas");
   setText("forecastBalance15", formatCurrencyCompact(currentBalance));
   setText("forecastIncomeTotal30", formatCurrencyCompact(nextIncome));
   setText("forecastExpense30", formatCurrencyCompact(nextExpense));
@@ -664,84 +665,99 @@ function renderOverviewChart(items) {
 
   destroyChart("overview");
   const overviewCanvas = getElement("overviewChart");
-  const overviewContext = overviewCanvas.getContext("2d");
-  const incomeGradient = overviewContext.createLinearGradient(0, 0, 0, 250);
-  incomeGradient.addColorStop(0, "rgba(72, 213, 151, 0.95)");
-  incomeGradient.addColorStop(1, "rgba(72, 213, 151, 0.45)");
-  const expenseGradient = overviewContext.createLinearGradient(0, 0, 0, 250);
-  expenseGradient.addColorStop(0, "rgba(255, 182, 50, 0.95)");
-  expenseGradient.addColorStop(1, "rgba(255, 182, 50, 0.42)");
+  const waterfallValues = [currentBalance, nextIncome, -nextExpense, projectedBalance];
+  const connectorLevels = [currentBalance, balanceAfterIncome, projectedBalance];
+  const waterfallPlugin = {
+    id: "forecastWaterfallLabels",
+    afterDatasetsDraw(chart) {
+      const { ctx, scales } = chart;
+      const bars = chart.getDatasetMeta(0).data;
+
+      ctx.save();
+      ctx.strokeStyle = "rgba(154, 180, 213, 0.4)";
+      ctx.lineWidth = 1;
+      ctx.setLineDash([4, 4]);
+
+      connectorLevels.forEach((level, index) => {
+        const currentBar = bars[index];
+        const nextBar = bars[index + 1];
+        if (!currentBar || !nextBar) return;
+        const y = scales.y.getPixelForValue(level);
+        ctx.beginPath();
+        ctx.moveTo(currentBar.x + currentBar.width / 2, y);
+        ctx.lineTo(nextBar.x - nextBar.width / 2, y);
+        ctx.stroke();
+      });
+
+      ctx.setLineDash([]);
+      ctx.textAlign = "center";
+      ctx.textBaseline = "bottom";
+      ctx.font = '700 11px Inter, "Segoe UI", Arial, sans-serif';
+
+      bars.forEach((bar, index) => {
+        const value = waterfallValues[index];
+        const prefix = index === 1 ? "+" : index === 2 ? "−" : "";
+        ctx.fillStyle = index === 2
+          ? "#ffb632"
+          : index === 1
+            ? "#48d597"
+            : projectedBalance < 0 && index === 3
+              ? "#ff4f5e"
+              : "#dce8f5";
+        ctx.fillText(
+          `${prefix}${formatCurrencyCompact(Math.abs(value))}`,
+          bar.x,
+          Math.min(bar.y, bar.base) - 8
+        );
+      });
+      ctx.restore();
+    },
+  };
 
   state.charts.overview = new Chart(overviewCanvas, {
     type: "bar",
     data: {
-      labels: [currentLabel, nextLabel],
+      labels: ["Saldo atual", "+ Recebimento", "− Despesas", "Saldo final"],
       datasets: [
         {
-          label: "Proximas entradas",
-          data: [0, nextIncome],
-          backgroundColor: incomeGradient,
-          borderColor: "#48d597",
-          borderWidth: 1,
-          borderRadius: 8,
-          borderSkipped: false,
-          maxBarThickness: 44,
-          categoryPercentage: 0.72,
-          barPercentage: 0.78,
-        },
-        {
-          label: "Proximas despesas",
-          data: [0, nextExpense],
-          backgroundColor: expenseGradient,
-          borderColor: "#ffb632",
-          borderWidth: 1,
-          borderRadius: 8,
-          borderSkipped: false,
-          maxBarThickness: 44,
-          categoryPercentage: 0.72,
-          barPercentage: 0.78,
-        },
-        {
-          type: "line",
-          label: "Saldo acumulado",
-          data: [currentBalance, projectedBalance],
-          borderColor: "#00b8ff",
-          backgroundColor: "#00b8ff",
-          pointBackgroundColor: [
-            currentBalance < 0 ? "#ff4f5e" : "#00b8ff",
+          label: "Evolucao do saldo",
+          data: [
+            [0, currentBalance],
+            [currentBalance, balanceAfterIncome],
+            [projectedBalance, balanceAfterIncome],
+            [0, projectedBalance],
+          ],
+          backgroundColor: [
+            "rgba(0, 184, 255, 0.58)",
+            "rgba(72, 213, 151, 0.78)",
+            "rgba(255, 182, 50, 0.78)",
+            projectedBalance < 0
+              ? "rgba(255, 79, 94, 0.72)"
+              : "rgba(0, 184, 255, 0.9)",
+          ],
+          borderColor: [
+            "#00b8ff",
+            "#48d597",
+            "#ffb632",
             projectedBalance < 0 ? "#ff4f5e" : "#00b8ff",
           ],
-          pointBorderColor: "#131a22",
-          pointBorderWidth: 3,
-          pointRadius: 6,
-          pointHoverRadius: 8,
-          borderWidth: 3,
-          tension: 0.28,
-          fill: false,
-          order: 0,
+          borderWidth: 1,
+          borderRadius: 8,
+          borderSkipped: false,
+          maxBarThickness: 58,
+          barPercentage: 0.66,
+          categoryPercentage: 0.78,
         },
       ],
     },
+    plugins: [waterfallPlugin],
     options: {
       responsive: true,
       maintainAspectRatio: false,
-      interaction: { mode: "index", intersect: false },
+      interaction: { mode: "nearest", intersect: true },
       layout: { padding: { top: 6, right: 8, bottom: 0, left: 2 } },
       plugins: {
-        legend: {
-          display: true,
-          position: "top",
-          align: "end",
-          labels: {
-            color: "#a8bdd9",
-            usePointStyle: true,
-            pointStyle: "circle",
-            boxWidth: 8,
-            boxHeight: 8,
-            padding: 16,
-            font: { size: 11, weight: "600" },
-          },
-        },
+        legend: { display: false },
         tooltip: {
           backgroundColor: "#0c141b",
           titleColor: "#f4f7fb",
@@ -752,12 +768,13 @@ function renderOverviewChart(items) {
           displayColors: true,
           usePointStyle: true,
           callbacks: {
-            label: (context) => `${context.dataset.label}: ${formatCurrency(context.parsed.y)}`,
-            footer: (items) => {
-              const index = items[0]?.dataIndex ?? 0;
-              const balances = [currentBalance, projectedBalance];
-              return `Resultado: ${balances[index] >= 0 ? "saldo positivo" : "saldo negativo"}`;
+            label: (context) => {
+              const labels = ["Saldo atual", "Recebimento", "Despesas", "Saldo projetado"];
+              return `${labels[context.dataIndex]}: ${formatCurrency(waterfallValues[context.dataIndex])}`;
             },
+            footer: (items) => items[0]?.dataIndex === 3
+              ? `Resultado: ${projectedBalance >= 0 ? "saldo positivo" : "saldo negativo"}`
+              : "",
           },
         },
       },

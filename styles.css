@@ -276,14 +276,14 @@ svg {
 
 .forecast-analysis-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1.25fr) minmax(300px, 0.9fr);
+  grid-template-columns: minmax(0, 1.45fr) minmax(300px, 0.85fr);
   gap: 20px;
   align-items: stretch;
 }
 
 .forecast-chart-wrap {
   position: relative;
-  min-height: 310px;
+  min-height: 330px;
   padding: 16px 16px 10px;
   border: 1px solid var(--border-soft);
   border-radius: 16px;
@@ -324,7 +324,7 @@ svg {
 }
 
 .forecast-chart-wrap canvas {
-  height: 245px !important;
+  height: 265px !important;
 }
 
 .forecast-calculations {
@@ -341,6 +341,7 @@ svg {
   border: 1px solid var(--border-soft);
   border-radius: 14px;
   background: var(--panel-soft);
+  box-shadow: inset 3px 0 0 rgba(72, 213, 151, 0.7);
   transition:
     border-color 0.2s ease,
     transform 0.2s ease;
@@ -353,6 +354,7 @@ svg {
 
 .forecast-card.negative {
   border-color: rgba(255, 79, 94, 0.35);
+  box-shadow: inset 3px 0 0 rgba(255, 79, 94, 0.8);
 }
 
 .forecast-card-header {
@@ -410,6 +412,8 @@ svg {
 
 .forecast-card p {
   margin: 0;
+  padding-top: 10px;
+  border-top: 1px solid var(--border-soft);
   color: var(--muted);
   font-size: 0.82rem;
 }
