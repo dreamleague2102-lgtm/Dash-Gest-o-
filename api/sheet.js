@@ -9,6 +9,10 @@ const DEFAULT_MONTH_SHEETS = [
   "Junho",
   "Julho",
   "Agosto",
+  "Setembro",
+  "Outubro",
+  "Novembro",
+  "Dezembro",
 ];
 
 function getSheetId() {
